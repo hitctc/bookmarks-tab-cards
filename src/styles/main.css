@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  @apply bg-slate-50 text-slate-900;
+  @apply dark:bg-slate-950 dark:text-slate-100;
+}
+
+
