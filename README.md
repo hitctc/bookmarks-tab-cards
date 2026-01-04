@@ -10,6 +10,8 @@
 * 键盘：`↑/↓` 选择、`Enter` 打开、`Esc` 清空搜索、`Ctrl/Cmd + K` 聚焦搜索
 * 缓存：优先读 `chrome.storage.local` 缓存秒开首屏，后台刷新书签
 * 设置：入口文件夹、主题（系统/浅色/深色）、打开方式（当前标签/新标签）
+* 卡片：顶部 16:9 图标区（优先显示 favicon，失败则显示书签标题）
+* 网格：支持设置每行卡片数量（5~9，默认 5）
 
 ## 开发与构建
 
@@ -46,6 +48,8 @@ npm run dev
 npm run build:watch
 ```
 
+说明：`build:watch` 默认使用 development 模式，会生成 sourcemap，报错时能直接定位到 `.vue/.ts` 源码位置，调试体验更好。
+
 ### 3) 构建扩展（产出 dist/，仅一次也可以）
 
 ```bash
@@ -58,6 +62,14 @@ npm run build
 * 开启「开发者模式」
 * 点击「加载已解压的扩展程序」
 * 选择本项目的 `dist/` 目录
+
+如果提示“无法加载扩展/无法加载清单”，先确认 `dist/` 目录下存在：
+
+* `manifest.json`
+* `index.html`
+* `assets/`
+
+缺少时重新执行 `npm run build` 后再加载。
 
 ### 5) 扩展环境调试的具体操作步骤
 
@@ -75,5 +87,9 @@ npm run build
 
 ## 权限与隐私
 
-* 权限：`bookmarks`、`storage`
-* 隐私：插件不采集、不上传任何数据；页面加载不主动请求第三方资源（favicon 优先使用 `chrome://favicon2/`）
+* 权限：
+  * `bookmarks`：读取书签
+  * `storage`：缓存索引、设置
+* 隐私：
+  * 插件不采集、不上传任何数据
+  * 页面加载不主动请求第三方资源（favicon 优先使用 `chrome://favicon2/`）

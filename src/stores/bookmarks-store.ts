@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import { buildBookmarkIndex, fetchBookmarksTree } from '@/services/bookmarks-service';
-import { getFromStorage, setToStorage } from '@/services/storage-service';
+import { getFromStorage, removeFromStorage, setToStorage } from '@/services/storage-service';
 import type { BookmarkCachePayload, BookmarkFolderNode, BookmarkIndexItem } from '@/types/bookmarks';
 import { logError, logInfo } from '@/utils/logger';
 
@@ -168,25 +168,37 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   }
 
   async function loadCache(entryFolderId: string): Promise<void> {
-    const cached = await getFromStorage<BookmarkCachePayload>(STORAGE_KEYS.bookmarksCache);
-    if (!cached || cached.schemaVersion !== 1) return;
+    try {
+      const cached = await getFromStorage<BookmarkCachePayload>(STORAGE_KEYS.bookmarksCache);
+      if (!cached || cached.schemaVersion !== 1) return;
 
-    folderNodes.value = cached.folderNodes ?? [];
-    bookmarkItems.value = cached.bookmarkItems ?? [];
-    folderMap.value = buildFolderMap(folderNodes.value);
-    bookmarkMap.value = buildBookmarkMap(bookmarkItems.value);
-    lastUpdatedAt.value = cached.generatedAt ?? null;
+      if (!Array.isArray(cached.folderNodes) || !Array.isArray(cached.bookmarkItems)) {
+        logError('书签缓存格式异常，已忽略并清理', cached);
+        await removeFromStorage(STORAGE_KEYS.bookmarksCache);
+        return;
+      }
 
-    const ok = setCurrentFolder(entryFolderId);
-    if (!ok) {
-      const fallbackRoot = rootFolderId.value;
-      if (fallbackRoot) setCurrentFolder(fallbackRoot);
+      folderNodes.value = cached.folderNodes;
+      bookmarkItems.value = cached.bookmarkItems;
+      folderMap.value = buildFolderMap(folderNodes.value);
+      bookmarkMap.value = buildBookmarkMap(bookmarkItems.value);
+      lastUpdatedAt.value = cached.generatedAt ?? null;
+
+      const ok = setCurrentFolder(entryFolderId);
+      if (!ok) {
+        const fallbackRoot = rootFolderId.value;
+        if (fallbackRoot) setCurrentFolder(fallbackRoot);
+      }
+
+      logInfo('书签缓存加载完成', {
+        folders: folderNodes.value.length,
+        bookmarks: bookmarkItems.value.length,
+      });
+    } catch (error) {
+      // 兜底：避免任何缓存异常导致白屏
+      logError('书签缓存解析失败，已忽略并清理', error);
+      await removeFromStorage(STORAGE_KEYS.bookmarksCache);
     }
-
-    logInfo('书签缓存加载完成', {
-      folders: folderNodes.value.length,
-      bookmarks: bookmarkItems.value.length,
-    });
   }
 
   async function refreshFromChrome(entryFolderId: string): Promise<void> {
@@ -229,6 +241,9 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   async function bootstrap(entryFolderId: string): Promise<void> {
     try {
       await loadCache(entryFolderId);
+    } catch (error) {
+      // loadCache 内部已兜底，这里再保险一次，确保 initPage 不会因为缓存炸掉
+      logError('书签初始化失败（缓存阶段）', error);
     } finally {
       isReady.value = true;
     }

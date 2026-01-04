@@ -16,9 +16,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
-import { getFaviconUrl } from '@/utils/url';
+import { getFaviconFallbackUrls } from '@/utils/url';
 
 const props = withDefaults(
   defineProps<{
@@ -33,9 +33,13 @@ const props = withDefaults(
   }
 );
 
-const hasFaviconError = ref(false);
+const faviconIndex = ref(0);
 
-const faviconUrl = computed(() => getFaviconUrl(props.url, 64));
+const faviconCandidates = computed(() => getFaviconFallbackUrls(props.url, 64));
+
+const faviconUrl = computed(() => faviconCandidates.value[faviconIndex.value] || '');
+
+const hasFaviconError = computed(() => !faviconUrl.value);
 
 const fallbackText = computed(() => {
   const text = (props.domain || props.title || '?').trim();
@@ -43,8 +47,15 @@ const fallbackText = computed(() => {
 });
 
 function handleFaviconError() {
-  hasFaviconError.value = true;
+  faviconIndex.value += 1;
 }
+
+watch(
+  () => props.url,
+  () => {
+    faviconIndex.value = 0;
+  }
+);
 </script>
 
 

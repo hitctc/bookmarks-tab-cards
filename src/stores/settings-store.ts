@@ -1,6 +1,6 @@
 import { usePreferredDark } from '@vueuse/core';
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import { getFromStorage, setToStorage } from '@/services/storage-service';
@@ -14,6 +14,7 @@ function getDefaultSettings(): UserSettings {
     entryFolderId: '1',
     themeMode: 'system',
     openBehavior: 'currentTab',
+    cardsPerRow: 5,
   };
 }
 
@@ -21,15 +22,17 @@ function mergeSettings(stored: UserSettings | null): UserSettings {
   const defaults = getDefaultSettings();
   if (!stored) return defaults;
 
+  const cardsPerRow = clampCardsPerRow(Number((stored as Partial<UserSettings>).cardsPerRow ?? defaults.cardsPerRow));
+
   return {
     ...defaults,
     ...stored,
     schemaVersion: 1,
+    cardsPerRow,
   };
 }
 
-function applyThemeMode(themeMode: ThemeMode, isSystemDark: boolean) {
-  const shouldUseDark = themeMode === 'dark' || (themeMode === 'system' && isSystemDark);
+function applyDarkClass(shouldUseDark: boolean) {
   const root = document.documentElement;
 
   if (shouldUseDark) {
@@ -49,10 +52,17 @@ export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<UserSettings>(getDefaultSettings());
   const preferredDark = usePreferredDark();
 
+  const shouldUseDark = computed(() => {
+    const mode = settings.value.themeMode;
+    if (mode === 'dark') return true;
+    if (mode === 'light') return false;
+    return preferredDark.value;
+  });
+
   watch(
-    [() => settings.value.themeMode, preferredDark],
-    ([themeMode, isSystemDark]) => {
-      applyThemeMode(themeMode, isSystemDark);
+    shouldUseDark,
+    (isDark) => {
+      applyDarkClass(isDark);
     },
     { immediate: true }
   );
@@ -80,7 +90,7 @@ export const useSettingsStore = defineStore('settings', () => {
       hasError.value = false;
       errorMessage.value = null;
 
-      settings.value = mergeSettings({ ...settings.value, ...partial });
+      settings.value = mergeSettings({ ...settings.value, ...partial } as UserSettings);
       const ok = await setToStorage(STORAGE_KEYS.settings, settings.value);
       if (!ok) {
         hasError.value = true;
@@ -109,5 +119,10 @@ export const useSettingsStore = defineStore('settings', () => {
     updateSettings,
   };
 });
+
+function clampCardsPerRow(value: number): number {
+  const safe = Number.isFinite(value) ? Math.round(value) : 5;
+  return Math.max(5, Math.min(9, safe));
+}
 
 

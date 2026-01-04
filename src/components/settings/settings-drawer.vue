@@ -33,6 +33,25 @@
           @change="handleOpenBehaviorChange"
         />
       </a-form-item>
+
+      <a-form-item label="每行卡片数量">
+        <div class="flex items-center gap-3">
+          <a-slider
+            class="flex-1"
+            :min="5"
+            :max="9"
+            :step="1"
+            :value="settings.cardsPerRow"
+            @change="handleCardsPerRowChange"
+          />
+          <div class="w-10 text-right text-sm text-slate-700 dark:text-slate-200">
+            {{ settings.cardsPerRow }}
+          </div>
+        </div>
+        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          建议范围：5~6 更舒适；数值越大卡片越小。
+        </div>
+      </a-form-item>
     </a-form>
 
     <a-divider />
@@ -113,6 +132,12 @@ async function handleThemeChange(value: unknown) {
 async function handleOpenBehaviorChange(value: unknown) {
   const openBehavior = String(value) as OpenBehavior;
   await settingsStore.updateSettings({ openBehavior });
+}
+
+async function handleCardsPerRowChange(value: unknown) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return;
+  await settingsStore.updateSettings({ cardsPerRow: next });
 }
 
 async function handleRefreshBookmarks() {

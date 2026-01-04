@@ -73,4 +73,33 @@ export async function setToStorage<T>(key: string, value: T): Promise<boolean> {
   }
 }
 
+export async function removeFromStorage(key: string): Promise<boolean> {
+  if (isChromeStorageAvailable()) {
+    return await new Promise<boolean>((resolve) => {
+      try {
+        chrome.storage.local.remove(key, () => {
+          const lastError = chrome.runtime?.lastError;
+          if (lastError) {
+            logError('删除本地存储失败', lastError);
+            resolve(false);
+            return;
+          }
+          resolve(true);
+        });
+      } catch (error) {
+        logError('删除本地存储异常', error);
+        resolve(false);
+      }
+    });
+  }
+
+  try {
+    globalThis.localStorage?.removeItem(key);
+    return true;
+  } catch (error) {
+    logError('删除 localStorage 异常', error);
+    return false;
+  }
+}
+
 

@@ -1,12 +1,13 @@
 <template>
   <div class="min-h-full">
-    <div class="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+    <div class="mx-auto flex max-w-[1600px] flex-col gap-4 p-4">
       <div class="flex items-center gap-3">
         <div class="select-none text-base font-semibold text-slate-900 dark:text-slate-100">
           书签卡片
         </div>
 
         <a-input
+          class="flex-1"
           ref="searchInputRef"
           v-model:value="searchQuery"
           allow-clear
@@ -50,7 +51,7 @@
             未找到匹配结果
           </div>
 
-          <a
+            <a
             v-for="(item, index) in searchResults"
             :key="item.id"
             class="flex items-center gap-3 px-4 py-3 transition"
@@ -84,7 +85,7 @@
             当前文件夹没有内容。你可以在书签栏添加常用网站，或在设置里切换入口文件夹。
           </div>
 
-          <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div v-else class="grid gap-3" :style="gridStyle">
             <FolderCard
               v-for="folder in bookmarksStore.currentFolders"
               :key="folder.id"
@@ -120,6 +121,7 @@ import SettingsDrawer from '@/components/settings/settings-drawer.vue';
 import { searchBookmarkItems } from '@/services/bookmarks-search';
 import { useBookmarksStore } from '@/stores/bookmarks-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { logError } from '@/utils/logger';
 
 interface FocusableInput {
   focus: () => void;
@@ -151,6 +153,15 @@ const isCurrentFolderEmpty = computed(() => {
   return bookmarksStore.currentFolders.length === 0 && bookmarksStore.currentBookmarks.length === 0;
 });
 
+const gridStyle = computed(() => {
+  // 先按用户设置渲染，范围由设置组件保证在 5~9
+  const raw = Number(settingsStore.settings.cardsPerRow ?? 5);
+  const cols = Number.isFinite(raw) ? Math.max(5, Math.min(9, Math.round(raw))) : 5;
+  return {
+    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+  };
+});
+
 const lastUpdatedText = computed(() => {
   const ts = bookmarksStore.lastUpdatedAt;
   if (!ts) return '未更新';
@@ -177,15 +188,11 @@ function focusSearchInput() {
 
 function openUrl(url: string) {
   if (!url) return;
-
   if (settingsStore.settings.openBehavior === 'newTab') {
     const opened = window.open(url, '_blank', 'noopener');
-    if (!opened) {
-      window.location.href = url;
-    }
+    if (!opened) window.location.href = url;
     return;
   }
-
   window.location.href = url;
 }
 
@@ -252,13 +259,19 @@ useEventListener(window, 'keydown', (event) => {
 });
 
 onMounted(() => {
-  void (async () => {
+  void initPage();
+});
+
+async function initPage() {
+  try {
     if (!settingsStore.isReady) await settingsStore.initSettings();
     await bookmarksStore.bootstrap(settingsStore.settings.entryFolderId);
     await nextTick();
     focusSearchInput();
-  })();
-});
+  } catch (error) {
+    logError('页面初始化失败', error);
+  }
+}
 </script>
 
 
