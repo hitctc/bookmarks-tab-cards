@@ -8,6 +8,7 @@ export interface UserSettings {
   themeMode: ThemeMode;
   openBehavior: OpenBehavior;
   cardsPerRow: number; // 5~9
+  enableSitePreviews: boolean; // 是否生成站点预览图（会访问目标站点并缓存截图）
 }
 
 

@@ -15,6 +15,7 @@ function getDefaultSettings(): UserSettings {
     themeMode: 'system',
     openBehavior: 'currentTab',
     cardsPerRow: 5,
+    enableSitePreviews: true,
   };
 }
 
@@ -23,12 +24,16 @@ function mergeSettings(stored: UserSettings | null): UserSettings {
   if (!stored) return defaults;
 
   const cardsPerRow = clampCardsPerRow(Number((stored as Partial<UserSettings>).cardsPerRow ?? defaults.cardsPerRow));
+  const enableSitePreviews = Boolean(
+    (stored as Partial<UserSettings>).enableSitePreviews ?? defaults.enableSitePreviews
+  );
 
   return {
     ...defaults,
     ...stored,
     schemaVersion: 1,
     cardsPerRow,
+    enableSitePreviews,
   };
 }
 

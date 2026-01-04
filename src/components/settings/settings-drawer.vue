@@ -34,6 +34,17 @@
         />
       </a-form-item>
 
+      <a-form-item label="站点预览图">
+        <a-select
+          :value="settings.enableSitePreviews ? 'on' : 'off'"
+          :options="sitePreviewOptions"
+          @change="handleSitePreviewChange"
+        />
+        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          开启后会在卡片 16:9 区域加载网页并生成截图缓存；你也可以在卡片右上角手动刷新单张预览图。
+        </div>
+      </a-form-item>
+
       <a-form-item label="每行卡片数量">
         <div class="flex items-center gap-3">
           <a-slider
@@ -66,8 +77,8 @@
     <a-divider />
 
     <div class="text-xs leading-6 text-slate-500 dark:text-slate-400">
-      <div>权限：bookmarks、storage。</div>
-      <div>隐私：插件不采集、不上传任何数据；页面加载不主动请求第三方资源。</div>
+      <div>权限：bookmarks、storage、tabs（生成预览图时用于截图）。</div>
+      <div>隐私：插件不采集、不上传任何数据；开启预览图时会访问目标站点并把截图缓存到本地。</div>
     </div>
   </a-drawer>
 </template>
@@ -102,6 +113,11 @@ const openBehaviorOptions = [
   { value: 'newTab', label: '新标签打开' },
 ];
 
+const sitePreviewOptions = [
+  { value: 'on', label: '开启（生成预览图）' },
+  { value: 'off', label: '关闭（仅显示 favicon）' },
+];
+
 const lastUpdatedText = computed(() => {
   const ts = bookmarksStore.lastUpdatedAt;
   if (!ts) return '未更新';
@@ -132,6 +148,11 @@ async function handleThemeChange(value: unknown) {
 async function handleOpenBehaviorChange(value: unknown) {
   const openBehavior = String(value) as OpenBehavior;
   await settingsStore.updateSettings({ openBehavior });
+}
+
+async function handleSitePreviewChange(value: unknown) {
+  const enableSitePreviews = String(value) === 'on';
+  await settingsStore.updateSettings({ enableSitePreviews });
 }
 
 async function handleCardsPerRowChange(value: unknown) {
