@@ -16,26 +16,37 @@ export function getFaviconUrl(url: string, size = 64): string {
   )}`;
 }
 
+function isChromeExtensionPage(): boolean {
+  try {
+    return globalThis.location?.protocol === 'chrome-extension:';
+  } catch {
+    return false;
+  }
+}
+
 export function getFaviconFallbackUrls(url: string, size = 64): string[] {
   const safeSize = Number.isFinite(size) ? Math.max(16, Math.min(256, size)) : 64;
   const rawUrl = url.trim();
   if (!rawUrl) return [];
 
-  const favicon2 = getFaviconUrl(rawUrl, safeSize);
-  // 旧版兜底：部分环境对 favicon2 支持不一致
-  const faviconLegacySized = `chrome://favicon/size/${safeSize}@2x/${rawUrl}`;
-  const faviconLegacy = `chrome://favicon/${rawUrl}`;
-
   const extra: string[] = [];
   // 进一步兜底：直接尝试站点根目录 favicon.ico（无需额外权限，img 会按浏览器规则请求）
   try {
     const parsed = new URL(rawUrl);
-    extra.push(`${parsed.origin}/favicon.ico`);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      extra.push(`${parsed.origin}/favicon.ico`);
+    }
   } catch {
     // ignore
   }
 
-  return [favicon2, faviconLegacySized, faviconLegacy, ...extra];
+  const candidates: string[] = [];
+  // chrome://favicon2 仅在扩展页面可用；开发态（http/https）会被浏览器拦截，导致控制台刷屏。
+  if (isChromeExtensionPage()) {
+    candidates.push(getFaviconUrl(rawUrl, safeSize));
+  }
+
+  return [...candidates, ...extra];
 }
 
 

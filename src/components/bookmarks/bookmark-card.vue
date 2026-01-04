@@ -9,15 +9,6 @@
     <div class="aspect-video bg-slate-100 dark:bg-slate-800">
       <BookmarkCover :url="item.url" :title="item.title" />
     </div>
-
-    <div class="p-3">
-      <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-        {{ item.title }}
-      </div>
-      <div class="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-        {{ item.url }}
-      </div>
-    </div>
   </a>
 </template>
 

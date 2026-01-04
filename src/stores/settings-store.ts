@@ -15,25 +15,33 @@ function getDefaultSettings(): UserSettings {
     themeMode: 'system',
     openBehavior: 'currentTab',
     cardsPerRow: 5,
-    enableSitePreviews: true,
   };
 }
 
-function mergeSettings(stored: UserSettings | null): UserSettings {
+function mergeSettings(stored: unknown): UserSettings {
   const defaults = getDefaultSettings();
-  if (!stored) return defaults;
+  const raw = stored && typeof stored === 'object' ? (stored as Record<string, unknown>) : {};
 
-  const cardsPerRow = clampCardsPerRow(Number((stored as Partial<UserSettings>).cardsPerRow ?? defaults.cardsPerRow));
-  const enableSitePreviews = Boolean(
-    (stored as Partial<UserSettings>).enableSitePreviews ?? defaults.enableSitePreviews
-  );
+  const entryFolderId =
+    typeof raw.entryFolderId === 'string' && raw.entryFolderId.trim() ? raw.entryFolderId.trim() : defaults.entryFolderId;
+
+  const themeMode =
+    raw.themeMode === 'system' || raw.themeMode === 'light' || raw.themeMode === 'dark'
+      ? (raw.themeMode as ThemeMode)
+      : defaults.themeMode;
+
+  const openBehavior = raw.openBehavior === 'newTab' || raw.openBehavior === 'currentTab'
+    ? raw.openBehavior
+    : defaults.openBehavior;
+
+  const cardsPerRow = clampCardsPerRow(Number(raw.cardsPerRow ?? defaults.cardsPerRow));
 
   return {
-    ...defaults,
-    ...stored,
     schemaVersion: 1,
+    entryFolderId,
+    themeMode,
+    openBehavior,
     cardsPerRow,
-    enableSitePreviews,
   };
 }
 
@@ -77,7 +85,7 @@ export const useSettingsStore = defineStore('settings', () => {
       hasError.value = false;
       errorMessage.value = null;
 
-      const stored = await getFromStorage<UserSettings>(STORAGE_KEYS.settings);
+      const stored = await getFromStorage<unknown>(STORAGE_KEYS.settings);
       settings.value = mergeSettings(stored);
       logInfo('设置加载完成', settings.value);
     } catch (error) {
@@ -95,7 +103,7 @@ export const useSettingsStore = defineStore('settings', () => {
       hasError.value = false;
       errorMessage.value = null;
 
-      settings.value = mergeSettings({ ...settings.value, ...partial } as UserSettings);
+      settings.value = mergeSettings({ ...settings.value, ...partial });
       const ok = await setToStorage(STORAGE_KEYS.settings, settings.value);
       if (!ok) {
         hasError.value = true;

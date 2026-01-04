@@ -3,7 +3,7 @@
   "name": "Bookmarks Tab Cards",
   "version": "0.1.0",
   "description": "在新标签页以卡片形式浏览与搜索书签。",
-  "permissions": ["bookmarks", "storage", "tabs"],
+  "permissions": ["bookmarks", "storage"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob: chrome: https: http:; frame-src 'self' https: http:; child-src 'self' https: http:;"
   },
