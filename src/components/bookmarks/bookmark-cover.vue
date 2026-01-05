@@ -1,6 +1,6 @@
 <template>
   <div class="relative h-full w-full overflow-hidden" :style="pseudoCoverStyle">
-    <div class="absolute inset-0 bg-gradient-to-b from-black/10 via-black/10 to-black/55" />
+    <div class="absolute inset-0 bg-gradient-to-b from-black/5 via-black/5 to-black/40" />
 
     <div class="absolute inset-0 flex flex-col p-3">
       <div class="flex items-center">
@@ -333,10 +333,10 @@ function rgbToHsl(r: number, g: number, b: number): HslColor {
 }
 
 function normalizeHslForGradient(input: HslColor): HslColor {
-  // 让颜色更适合做背景：稍微增饱和、控制亮度，避免过亮/过暗导致“脏”
+  // 让颜色更适合做背景：适度降饱和、提一点亮度，避免过亮/过暗导致“脏”
   const h = clamp(input.h, 0, 360);
-  const s = clamp(Math.max(input.s, 0.42), 0.42, 0.9);
-  const l = clamp(input.l, 0.22, 0.68);
+  const s = clamp(input.s, 0.32, 0.82);
+  const l = clamp(input.l + 0.06, 0.32, 0.78);
   return { h, s, l };
 }
 
@@ -376,7 +376,7 @@ function buildPseudoCoverStyle(seed: string): Record<string, string> {
   const safeSeed = (seed || '').trim().toLowerCase();
   if (!safeSeed) {
     return {
-      backgroundImage: 'linear-gradient(135deg, #64748b, #334155)',
+      backgroundImage: 'linear-gradient(135deg, #94a3b8, #475569)',
     };
   }
 
@@ -384,9 +384,9 @@ function buildPseudoCoverStyle(seed: string): Record<string, string> {
   const h1 = hash % 360;
   const h2 = (h1 + 40 + ((hash >>> 8) % 80)) % 360;
 
-  const s = 72;
-  const l1 = 50;
-  const l2 = 42;
+  const s = 62;
+  const l1 = 58;
+  const l2 = 50;
 
   const c1 = `hsl(${h1}, ${s}%, ${l1}%)`;
   const c2 = `hsl(${h2}, ${s}%, ${l2}%)`;
