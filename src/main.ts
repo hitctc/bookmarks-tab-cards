@@ -1,7 +1,7 @@
 import 'ant-design-vue/dist/reset.css';
 import '@/styles/main.css';
 
-import { Button, Divider, Drawer, Form, Input, Select, Slider, Spin, TreeSelect } from 'ant-design-vue';
+import { Button, Divider, Drawer, Form, Input, Modal, Popconfirm, Select, Slider, Spin, TreeSelect } from 'ant-design-vue';
 import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 
@@ -18,6 +18,8 @@ function bootstrapApp() {
   app.use(Drawer);
   app.use(Form);
   app.use(Input);
+  app.use(Modal);
+  app.use(Popconfirm);
   app.use(Select);
   app.use(Slider);
   app.use(Spin);
@@ -26,5 +28,3 @@ function bootstrapApp() {
 }
 
 bootstrapApp();
-
-

@@ -2,7 +2,17 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
 import { STORAGE_KEYS } from '@/constants/storage-keys';
-import { buildBookmarkIndex, fetchBookmarksTree } from '@/services/bookmarks-service';
+import {
+  buildBookmarkIndex,
+  createFolder as createFolderInService,
+  deleteBookmark as deleteBookmarkInService,
+  fetchBookmarksTree,
+  updateFolder as updateFolderInService,
+  updateBookmark as updateBookmarkInService,
+  type CreateFolderPayload,
+  type UpdateFolderPayload,
+  type UpdateBookmarkPayload,
+} from '@/services/bookmarks-service';
 import { getFromStorage, removeFromStorage, setToStorage } from '@/services/storage-service';
 import type { BookmarkCachePayload, BookmarkFolderNode, BookmarkIndexItem } from '@/types/bookmarks';
 import { logError, logInfo } from '@/utils/logger';
@@ -239,6 +249,78 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     }
   }
 
+  async function updateBookmark(
+    bookmarkId: string,
+    payload: UpdateBookmarkPayload,
+    entryFolderId: string
+  ): Promise<boolean> {
+    try {
+      hasError.value = false;
+      errorMessage.value = null;
+      await updateBookmarkInService(bookmarkId, payload);
+      await refreshFromChrome(entryFolderId);
+      if (hasError.value) return false;
+      return true;
+    } catch (error) {
+      hasError.value = true;
+      errorMessage.value = '书签更新失败';
+      logError('书签更新失败', error);
+      return false;
+    }
+  }
+
+  async function deleteBookmark(bookmarkId: string, entryFolderId: string): Promise<boolean> {
+    try {
+      hasError.value = false;
+      errorMessage.value = null;
+      await deleteBookmarkInService(bookmarkId);
+      await refreshFromChrome(entryFolderId);
+      if (hasError.value) return false;
+      return true;
+    } catch (error) {
+      hasError.value = true;
+      errorMessage.value = '书签删除失败';
+      logError('书签删除失败', error);
+      return false;
+    }
+  }
+
+  async function createFolder(payload: CreateFolderPayload, entryFolderId: string): Promise<boolean> {
+    try {
+      hasError.value = false;
+      errorMessage.value = null;
+      await createFolderInService(payload);
+      await refreshFromChrome(entryFolderId);
+      if (hasError.value) return false;
+      return true;
+    } catch (error) {
+      hasError.value = true;
+      errorMessage.value = '创建目录失败';
+      logError('创建目录失败', error);
+      return false;
+    }
+  }
+
+  async function updateFolder(
+    folderId: string,
+    payload: UpdateFolderPayload,
+    entryFolderId: string
+  ): Promise<boolean> {
+    try {
+      hasError.value = false;
+      errorMessage.value = null;
+      await updateFolderInService(folderId, payload);
+      await refreshFromChrome(entryFolderId);
+      if (hasError.value) return false;
+      return true;
+    } catch (error) {
+      hasError.value = true;
+      errorMessage.value = '目录更新失败';
+      logError('目录更新失败', error);
+      return false;
+    }
+  }
+
   async function bootstrap(entryFolderId: string): Promise<void> {
     try {
       await loadCache(entryFolderId);
@@ -277,7 +359,10 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     goToParentFolder,
     bootstrap,
     refreshFromChrome,
+    updateBookmark,
+    deleteBookmark,
+    createFolder,
+    updateFolder,
     loadCache,
   };
 });
-

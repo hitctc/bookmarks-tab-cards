@@ -3,10 +3,46 @@ import { normalizeSearchText } from '@/utils/text';
 import { getDomainFromUrl } from '@/utils/url';
 import { logError, logInfo } from '@/utils/logger';
 
-import { getMockBookmarksTree } from './mock-bookmarks';
+import {
+  createMockFolder,
+  getMockBookmarksTree,
+  moveMockBookmark,
+  moveMockFolder,
+  removeMockBookmark,
+  updateMockBookmark,
+  updateMockFolder,
+} from './mock-bookmarks';
 
 function isChromeBookmarksAvailable(): boolean {
   return !!globalThis.chrome?.bookmarks?.getTree;
+}
+
+function isChromeBookmarksUpdateAvailable(): boolean {
+  return !!globalThis.chrome?.bookmarks?.update;
+}
+
+function isChromeBookmarksRemoveAvailable(): boolean {
+  return !!globalThis.chrome?.bookmarks?.remove;
+}
+
+function isChromeBookmarksMoveAvailable(): boolean {
+  return !!globalThis.chrome?.bookmarks?.move;
+}
+
+function isChromeBookmarksCreateAvailable(): boolean {
+  return !!globalThis.chrome?.bookmarks?.create;
+}
+
+export interface CreateFolderPayload {
+  title: string;
+  parentId: string;
+  index?: number;
+}
+
+export interface UpdateFolderPayload {
+  title: string;
+  parentId?: string;
+  index?: number;
 }
 
 function getFolderTitle(node: chrome.bookmarks.BookmarkTreeNode): string {
@@ -35,6 +71,283 @@ export async function fetchBookmarksTree(): Promise<chrome.bookmarks.BookmarkTre
           return;
         }
         resolve(nodes);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export interface UpdateBookmarkPayload {
+  title: string;
+  url: string;
+  parentId?: string;
+}
+
+export async function updateBookmark(
+  bookmarkId: string,
+  payload: UpdateBookmarkPayload
+): Promise<void> {
+  const nextTitle = payload.title.trim();
+  const nextUrl = payload.url.trim();
+  const nextParentId = payload.parentId?.trim();
+
+  if (!bookmarkId) {
+    throw new Error('缺少书签 ID，无法更新');
+  }
+  if (!nextTitle) {
+    throw new Error('书签标题不能为空');
+  }
+  if (!nextUrl) {
+    throw new Error('书签地址不能为空');
+  }
+
+  if (!isChromeBookmarksUpdateAvailable()) {
+    const ok = updateMockBookmark(bookmarkId, {
+      title: nextTitle,
+      url: nextUrl,
+    });
+    if (!ok) {
+      throw new Error('未找到可编辑的 mock 书签');
+    }
+    if (nextParentId) {
+      const moved = moveMockBookmark(bookmarkId, nextParentId);
+      if (!moved) {
+        throw new Error('书签目录移动失败');
+      }
+    }
+    logInfo('mock 书签更新完成', { bookmarkId });
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    try {
+      chrome.bookmarks.update(
+        bookmarkId,
+        {
+          title: nextTitle,
+          url: nextUrl,
+        },
+        (node) => {
+          const lastError = chrome.runtime?.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
+            return;
+          }
+          if (!node) {
+            reject(new Error('书签更新失败'));
+            return;
+          }
+          resolve();
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+  if (nextParentId) {
+    if (!isChromeBookmarksMoveAvailable()) {
+      throw new Error('当前环境不支持移动书签目录');
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      try {
+        chrome.bookmarks.move(bookmarkId, { parentId: nextParentId }, (node) => {
+          const lastError = chrome.runtime?.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
+            return;
+          }
+          if (!node) {
+            reject(new Error('书签目录移动失败'));
+            return;
+          }
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  return;
+}
+
+export async function createFolder(payload: CreateFolderPayload): Promise<void> {
+  const title = payload.title.trim();
+  const parentId = payload.parentId.trim();
+  const index = payload.index;
+  const hasValidIndex = Number.isFinite(index);
+  const safeIndex = hasValidIndex ? Math.max(0, Math.floor(index as number)) : undefined;
+
+  if (!title) {
+    throw new Error('目录名称不能为空');
+  }
+  if (!parentId) {
+    throw new Error('缺少父目录，无法创建');
+  }
+
+  if (!isChromeBookmarksCreateAvailable()) {
+    const ok = createMockFolder({
+      title,
+      parentId,
+      index: safeIndex,
+    });
+    if (!ok) {
+      throw new Error('mock 目录创建失败');
+    }
+    logInfo('mock 目录创建完成', { parentId, title });
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    try {
+      chrome.bookmarks.create(
+        {
+          title,
+          parentId,
+          index: safeIndex,
+        },
+        (node) => {
+          const lastError = chrome.runtime?.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
+            return;
+          }
+          if (!node) {
+            reject(new Error('目录创建失败'));
+            return;
+          }
+          resolve();
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export async function updateFolder(
+  folderId: string,
+  payload: UpdateFolderPayload
+): Promise<void> {
+  const nextTitle = payload.title.trim();
+  const nextParentId = payload.parentId?.trim();
+  const hasValidIndex = Number.isFinite(payload.index);
+  const safeIndex = hasValidIndex ? Math.max(0, Math.floor(payload.index as number)) : undefined;
+
+  if (!folderId) {
+    throw new Error('缺少目录 ID，无法更新');
+  }
+  if (!nextTitle) {
+    throw new Error('目录名称不能为空');
+  }
+  if (nextParentId && nextParentId === folderId) {
+    throw new Error('目录位置不能是自身');
+  }
+
+  if (!isChromeBookmarksUpdateAvailable()) {
+    const updated = updateMockFolder(folderId, {
+      title: nextTitle,
+    });
+    if (!updated) {
+      throw new Error('未找到可编辑的 mock 目录');
+    }
+
+    if (nextParentId) {
+      const moved = moveMockFolder(folderId, nextParentId, safeIndex);
+      if (!moved) {
+        throw new Error('目录位置更新失败');
+      }
+    }
+
+    logInfo('mock 目录更新完成', { folderId });
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    try {
+      chrome.bookmarks.update(
+        folderId,
+        {
+          title: nextTitle,
+        },
+        (node) => {
+          const lastError = chrome.runtime?.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
+            return;
+          }
+          if (!node) {
+            reject(new Error('目录更新失败'));
+            return;
+          }
+          resolve();
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+  const shouldMove = Boolean(nextParentId) || safeIndex != null;
+  if (!shouldMove) return;
+
+  if (!isChromeBookmarksMoveAvailable()) {
+    throw new Error('当前环境不支持移动目录');
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    try {
+      chrome.bookmarks.move(
+        folderId,
+        {
+          parentId: nextParentId,
+          index: safeIndex,
+        },
+        (node) => {
+          const lastError = chrome.runtime?.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message));
+            return;
+          }
+          if (!node) {
+            reject(new Error('目录位置更新失败'));
+            return;
+          }
+          resolve();
+        }
+      );
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export async function deleteBookmark(bookmarkId: string): Promise<void> {
+  if (!bookmarkId) {
+    throw new Error('缺少书签 ID，无法删除');
+  }
+
+  if (!isChromeBookmarksRemoveAvailable()) {
+    const ok = removeMockBookmark(bookmarkId);
+    if (!ok) {
+      throw new Error('未找到可删除的 mock 书签');
+    }
+    logInfo('mock 书签删除完成', { bookmarkId });
+    return;
+  }
+
+  return await new Promise<void>((resolve, reject) => {
+    try {
+      chrome.bookmarks.remove(bookmarkId, () => {
+        const lastError = chrome.runtime?.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
+        resolve();
       });
     } catch (error) {
       reject(error);
@@ -127,5 +440,3 @@ export function buildBookmarkIndex(
 
   return { folderNodes, bookmarkItems };
 }
-
-

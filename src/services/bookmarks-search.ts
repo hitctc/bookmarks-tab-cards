@@ -1,5 +1,6 @@
 import type { BookmarkIndexItem } from '@/types/bookmarks';
 import { normalizeSearchText } from '@/utils/text';
+import { buildPinyinSearchText } from '@/utils/pinyin';
 
 interface ScoredBookmarkItem {
   item: BookmarkIndexItem;
@@ -7,10 +8,42 @@ interface ScoredBookmarkItem {
   index: number;
 }
 
+interface PinyinCacheEntry {
+  fingerprint: string;
+  searchText: string;
+}
+
+const CJK_CHAR_PATTERN = /[\u3400-\u9FFF]/u;
+const LATIN_KEYWORD_PATTERN = /^[a-z]+$/;
+const pinyinSearchCache = new Map<string, PinyinCacheEntry>();
+
+function hasCjkChar(value: string): boolean {
+  return CJK_CHAR_PATTERN.test(value);
+}
+
+function shouldTryPinyinMatch(keywords: string[]): boolean {
+  return keywords.some((keyword) => LATIN_KEYWORD_PATTERN.test(keyword));
+}
+
+function getItemPinyinSearchText(item: BookmarkIndexItem): string {
+  if (!hasCjkChar(item.title) && !hasCjkChar(item.folderPath)) return '';
+
+  const fingerprint = `${item.title}\n${item.folderPath}`;
+  const cached = pinyinSearchCache.get(item.id);
+  if (cached && cached.fingerprint === fingerprint) {
+    return cached.searchText;
+  }
+
+  const searchText = buildPinyinSearchText(fingerprint);
+  pinyinSearchCache.set(item.id, { fingerprint, searchText });
+  return searchText;
+}
+
 function calculateMatchScore(
   item: BookmarkIndexItem,
   keywords: string[],
-  fullKeyword: string
+  fullKeyword: string,
+  pinyinSearchText = ''
 ): number {
   const title = item.title.toLowerCase();
   const domain = item.domain.toLowerCase();
@@ -33,6 +66,10 @@ function calculateMatchScore(
     }
     if (url.includes(keyword)) {
       score += 100;
+      continue;
+    }
+    if (pinyinSearchText.includes(keyword)) {
+      score += 160;
     }
   }
 
@@ -41,6 +78,8 @@ function calculateMatchScore(
     score += 120;
   } else if (fullKeyword && domain.includes(fullKeyword)) {
     score += 80;
+  } else if (fullKeyword && pinyinSearchText.includes(fullKeyword)) {
+    score += 60;
   } else if (fullKeyword && url.includes(fullKeyword)) {
     score += 40;
   }
@@ -83,16 +122,26 @@ export function searchBookmarkItems(
   const keywords = parseKeywords(fullKeyword);
   if (keywords.length === 0) return [];
 
+  const tryPinyinMatch = shouldTryPinyinMatch(keywords);
   const maxLimit = Number.isFinite(limit) ? Math.max(10, Math.min(500, limit)) : 120;
   const matched: ScoredBookmarkItem[] = [];
 
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
-    if (!containsAllKeywords(item.searchText, keywords)) continue;
+    let pinyinSearchText = '';
+    let isMatched = containsAllKeywords(item.searchText, keywords);
+    if (!isMatched && tryPinyinMatch) {
+      pinyinSearchText = getItemPinyinSearchText(item);
+      if (pinyinSearchText) {
+        const mergedSearchText = `${item.searchText} ${pinyinSearchText}`;
+        isMatched = containsAllKeywords(mergedSearchText, keywords);
+      }
+    }
+    if (!isMatched) continue;
 
     matched.push({
       item,
-      score: calculateMatchScore(item, keywords, fullKeyword),
+      score: calculateMatchScore(item, keywords, fullKeyword, pinyinSearchText),
       index: i,
     });
   }
@@ -100,4 +149,3 @@ export function searchBookmarkItems(
   matched.sort((a, b) => b.score - a.score || a.index - b.index);
   return matched.slice(0, maxLimit).map((x) => x.item);
 }
-
