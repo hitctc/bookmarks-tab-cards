@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Bookmarks Tab Cards",
+  "name": "书签新标签页卡片",
   "version": "0.1.0",
-  "description": "在新标签页以卡片形式浏览与搜索书签。",
-  "permissions": ["bookmarks", "storage"],
+  "description": "将新标签页替换为书签卡片视图，支持快速搜索和打开书签。",
+  "permissions": ["bookmarks", "storage", "favicon"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob: chrome: https: http:; frame-src 'self' https: http:; child-src 'self' https: http:;"
   },
@@ -11,5 +11,3 @@
     "newtab": "index.html"
   }
 }
-
-

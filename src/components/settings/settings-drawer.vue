@@ -38,7 +38,7 @@
         <div class="flex items-center gap-3">
           <a-slider
             class="flex-1"
-            :min="5"
+            :min="2"
             :max="9"
             :step="1"
             :value="settings.cardsPerRow"
@@ -144,5 +144,3 @@ async function handleRefreshBookmarks() {
   await bookmarksStore.refreshFromChrome(settingsStore.settings.entryFolderId);
 }
 </script>
-
-

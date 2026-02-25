@@ -7,7 +7,6 @@ export interface UserSettings {
   entryFolderId: string;
   themeMode: ThemeMode;
   openBehavior: OpenBehavior;
-  cardsPerRow: number; // 5~9
+  cardsPerRow: number; // 2~9
 }
-
 

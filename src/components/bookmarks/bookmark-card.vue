@@ -1,6 +1,6 @@
 <template>
   <a
-    class="group block overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+    class="group block w-full overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
     :href="item.url"
     :target="target"
     rel="noopener noreferrer"
@@ -22,5 +22,4 @@ defineProps<{
   target: '_self' | '_blank';
 }>();
 </script>
-
 

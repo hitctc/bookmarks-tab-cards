@@ -8,19 +8,26 @@ export function getDomainFromUrl(url: string): string {
 }
 
 export function getFaviconUrl(url: string, size = 64): string {
-  const safeSize = Number.isFinite(size) ? Math.max(16, Math.min(256, size)) : 64;
-  // 注意：favicon2 的参数是 page_url，不是 url
-  // show_fallback_monogram=1：无 favicon 时也会返回一个可识别的 monogram（部分版本有效）
-  return `chrome://favicon2/?size=${safeSize}&scale_factor=2x&show_fallback_monogram=1&page_url=${encodeURIComponent(
-    url
-  )}`;
+  return getExtensionFaviconUrl(url, size) ?? '';
 }
 
-function isChromeExtensionPage(): boolean {
+function getExtensionFaviconUrl(url: string, size = 64): string | null {
+  const safeSize = Number.isFinite(size) ? Math.max(16, Math.min(256, size)) : 64;
+  const rawUrl = url.trim();
+  if (!rawUrl) return null;
+
   try {
-    return globalThis.location?.protocol === 'chrome-extension:';
+    const getURL = globalThis.chrome?.runtime?.getURL;
+    if (typeof getURL !== 'function') return null;
+
+    // 使用 Chrome 扩展内置的 favicon 资源路径，避免 chrome://favicon2 的加载限制。
+    const base = getURL('/_favicon/');
+    const parsed = new URL(base);
+    parsed.searchParams.set('pageUrl', rawUrl);
+    parsed.searchParams.set('size', String(safeSize));
+    return parsed.toString();
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -41,12 +48,9 @@ export function getFaviconFallbackUrls(url: string, size = 64): string[] {
   }
 
   const candidates: string[] = [];
-  // chrome://favicon2 仅在扩展页面可用；开发态（http/https）会被浏览器拦截，导致控制台刷屏。
-  if (isChromeExtensionPage()) {
-    candidates.push(getFaviconUrl(rawUrl, safeSize));
-  }
+  const extensionFaviconUrl = getExtensionFaviconUrl(rawUrl, safeSize);
+  if (extensionFaviconUrl) candidates.push(extensionFaviconUrl);
 
   return [...candidates, ...extra];
 }
-
 

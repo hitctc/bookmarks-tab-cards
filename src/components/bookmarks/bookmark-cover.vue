@@ -1,41 +1,25 @@
 <template>
   <div class="relative h-full w-full overflow-hidden" :style="pseudoCoverStyle">
-    <div class="absolute inset-0 bg-gradient-to-b from-black/5 via-black/5 to-black/40" />
+    <div class="absolute inset-0 bg-gradient-to-b from-black/8 via-black/14 to-black/45" />
 
-    <div class="absolute inset-0 flex flex-col p-3">
-      <div class="flex items-center">
-        <div
-          class="flex items-center gap-2 rounded-md bg-white/15 px-2 py-1 backdrop-blur"
-          style="max-width: 100%"
-        >
-          <div class="flex h-5 w-5 items-center justify-center rounded bg-white/75" aria-hidden="true">
-            <img
-              v-if="!hasFaviconError"
-              class="h-4 w-4"
-              :src="faviconUrl"
-              :alt="title"
-              @load="handleFaviconLoad"
-              @error="handleFaviconError"
-            />
-            <span v-else class="text-[10px] font-bold text-slate-700">
-              {{ pseudoFallbackLetter }}
-            </span>
-          </div>
-
-          <div class="min-w-0 flex-1 truncate text-[11px] font-medium text-white/90">
-            {{ pseudoTopText }}
-          </div>
+    <div class="absolute inset-x-0 bottom-0 p-2.5">
+      <div class="flex items-center gap-2 rounded-md bg-white/14 px-2 py-1.5 backdrop-blur-sm">
+        <div class="flex h-5 w-5 items-center justify-center rounded bg-white/80" aria-hidden="true">
+          <img
+            v-if="!hasFaviconError"
+            class="h-4 w-4"
+            :src="faviconUrl"
+            :alt="title"
+            @load="handleFaviconLoad"
+            @error="handleFaviconError"
+          />
+          <span v-else class="text-[10px] font-bold text-slate-700">
+            {{ pseudoFallbackLetter }}
+          </span>
         </div>
-      </div>
 
-      <div class="flex-1" />
-
-      <div class="space-y-1">
-        <div class="text-[13px] font-bold leading-snug text-white drop-shadow-sm" :style="posterTitleClampStyle">
+        <div class="poster-title min-w-0 flex-1 text-sm font-semibold text-white">
           {{ pseudoPosterTitle }}
-        </div>
-        <div class="truncate text-[11px] font-medium text-white/75">
-          {{ pseudoPosterSubtitle }}
         </div>
       </div>
     </div>
@@ -69,12 +53,6 @@ const pseudoSeed = computed(() => {
   return (domain.value || props.title || props.url || '').trim();
 });
 
-const pseudoTopText = computed(() => {
-  const d = (domain.value || '').trim();
-  if (d) return d;
-  return (props.title || props.url || '').trim();
-});
-
 const pseudoFallbackLetter = computed(() => {
   const text = (domain.value || props.title || '?').trim();
   return (text[0] || '?').toUpperCase();
@@ -99,15 +77,6 @@ const pseudoPosterTitle = computed(() => {
 
   return (props.url || '').trim();
 });
-
-const pseudoPosterSubtitle = computed(() => buildPosterSubtitle(props.url, domain.value));
-
-const posterTitleClampStyle: Record<string, string> = {
-  display: '-webkit-box',
-  WebkitBoxOrient: 'vertical',
-  WebkitLineClamp: '2',
-  overflow: 'hidden',
-};
 
 const logoCoverStyle = ref<Record<string, string> | null>(null);
 
@@ -288,14 +257,14 @@ function pickTwoDominantHslColors(data: Uint8ClampedArray): { c1: HslColor; c2: 
 
   if (!c2) {
     c2 = {
-      h: (c1.h + 24) % 360,
-      s: c1.s,
-      l: clamp01(c1.l - 0.14),
+      h: (c1.h + 20) % 360,
+      s: clamp01(c1.s * 0.85),
+      l: clamp01(c1.l - 0.1),
     };
   }
 
   // 过灰的颜色会很闷，这种情况宁可回退到哈希渐变
-  if (c1.s < 0.12) return null;
+  if (c1.s < 0.08) return null;
   return { c1, c2 };
 }
 
@@ -333,10 +302,10 @@ function rgbToHsl(r: number, g: number, b: number): HslColor {
 }
 
 function normalizeHslForGradient(input: HslColor): HslColor {
-  // 让颜色更适合做背景：适度降饱和、提一点亮度，避免过亮/过暗导致“脏”
+  // 控制为中性色范围，避免高饱和导致“炸眼”
   const h = clamp(input.h, 0, 360);
-  const s = clamp(input.s, 0.32, 0.82);
-  const l = clamp(input.l + 0.06, 0.32, 0.78);
+  const s = clamp(input.s * 0.72, 0.16, 0.46);
+  const l = clamp(input.l + 0.02, 0.34, 0.62);
   return { h, s, l };
 }
 
@@ -376,41 +345,33 @@ function buildPseudoCoverStyle(seed: string): Record<string, string> {
   const safeSeed = (seed || '').trim().toLowerCase();
   if (!safeSeed) {
     return {
-      backgroundImage: 'linear-gradient(135deg, #94a3b8, #475569)',
+      backgroundImage: 'linear-gradient(135deg, #64748b, #334155)',
     };
   }
 
   const hash = hashToUint32(safeSeed);
-  const h1 = hash % 360;
-  const h2 = (h1 + 40 + ((hash >>> 8) % 80)) % 360;
+  const h1 = 206 + (hash % 18);
+  const h2 = h1 + 8 + ((hash >>> 8) % 10);
 
-  const s = 62;
-  const l1 = 58;
-  const l2 = 50;
+  const s1 = 24 + ((hash >>> 4) % 6);
+  const s2 = 16 + ((hash >>> 12) % 5);
+  const l1 = 50 + ((hash >>> 16) % 4);
+  const l2 = 38 + ((hash >>> 20) % 5);
 
-  const c1 = `hsl(${h1}, ${s}%, ${l1}%)`;
-  const c2 = `hsl(${h2}, ${s}%, ${l2}%)`;
+  const c1 = `hsl(${h1}, ${s1}%, ${l1}%)`;
+  const c2 = `hsl(${h2}, ${s2}%, ${l2}%)`;
 
   return {
     backgroundImage: `linear-gradient(135deg, ${c1}, ${c2})`,
   };
 }
-
-function buildPosterSubtitle(url: string, domain: string): string {
-  const raw = (url || '').trim();
-  if (!raw) return '';
-
-  try {
-    const parsed = new URL(raw);
-    const d = (domain || parsed.hostname || '').trim();
-    const path = `${parsed.pathname || ''}${parsed.search || ''}${parsed.hash || ''}`.trim();
-    if (d && path && path !== '/') return `${d}${path}`;
-    if (d) return d;
-    return raw;
-  } catch {
-    return raw;
-  }
-}
 </script>
 
-
+<style scoped>
+.poster-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+</style>

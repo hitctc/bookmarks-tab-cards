@@ -135,7 +135,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
 function clampCardsPerRow(value: number): number {
   const safe = Number.isFinite(value) ? Math.round(value) : 5;
-  return Math.max(5, Math.min(9, safe));
+  return Math.max(2, Math.min(9, safe));
 }
-
 

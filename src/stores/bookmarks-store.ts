@@ -173,7 +173,8 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       if (!cached || cached.schemaVersion !== 1) return;
 
       if (!Array.isArray(cached.folderNodes) || !Array.isArray(cached.bookmarkItems)) {
-        logError('书签缓存格式异常，已忽略并清理', cached);
+        // 兼容旧缓存结构：自动清理后走后台刷新，不作为运行时错误上报
+        logInfo('书签缓存格式不兼容，已自动清理', cached);
         await removeFromStorage(STORAGE_KEYS.bookmarksCache);
         return;
       }
@@ -279,5 +280,4 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     loadCache,
   };
 });
-
 

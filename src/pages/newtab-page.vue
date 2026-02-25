@@ -2,9 +2,14 @@
   <div class="min-h-full">
     <div class="mx-auto flex max-w-[1600px] flex-col gap-4 p-4">
       <div class="flex items-center gap-3">
-        <div class="select-none text-base font-semibold text-slate-900 dark:text-slate-100">
+        <button
+          class="select-none text-base font-semibold text-slate-900 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-100 dark:hover:text-slate-200 dark:focus-visible:ring-offset-slate-950"
+          type="button"
+          title="回到初始状态"
+          @click="resetToInitialState"
+        >
           书签卡片
-        </div>
+        </button>
 
         <a-input
           class="flex-1"
@@ -15,9 +20,14 @@
           @keydown="handleSearchKeydown"
         />
 
-        <a-button type="text" @click="isSettingsOpen = true">
+        <a-button type="text" title="打开设置" aria-label="打开设置" @click="isSettingsOpen = true">
           <template #icon>
             <SettingOutlined />
+          </template>
+        </a-button>
+        <a-button type="text" title="打开书签管理器" aria-label="打开书签管理器" @click="handleOpenBookmarksManager">
+          <template #icon>
+            <BookOutlined />
           </template>
         </a-button>
       </div>
@@ -46,35 +56,29 @@
       </div>
 
       <a-spin :spinning="bookmarksStore.isLoading && !bookmarksStore.isReady">
-        <div v-if="isSearchMode" class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <div v-if="searchResults.length === 0" class="p-4 text-sm text-slate-500 dark:text-slate-400">
+        <div v-if="isSearchMode">
+          <div
+            v-if="searchResults.length === 0"
+            class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
+          >
             未找到匹配结果
           </div>
 
-            <a
-            v-for="(item, index) in searchResults"
-            :key="item.id"
-            class="flex items-center gap-3 px-4 py-3 transition"
-            :class="index === selectedIndex ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'"
-            :href="item.url"
-            :target="openTarget"
-            rel="noopener noreferrer"
-            :title="item.folderPath ? `${item.folderPath} / ${item.url}` : item.url"
-            @mouseenter="selectedIndex = index"
-          >
-            <BookmarkAvatar :url="item.url" :title="item.title" :domain="item.domain" :size="32" />
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                {{ item.title }}
-              </div>
-              <div class="truncate text-xs text-slate-500 dark:text-slate-400">
-                {{ item.domain || item.url }}
-                <span v-if="item.folderPath" class="ml-2 text-slate-400 dark:text-slate-500">
-                  {{ item.folderPath }}
-                </span>
-              </div>
+          <div v-else class="grid items-start gap-3" :style="gridStyle">
+            <div
+              v-for="(item, index) in searchResults"
+              :key="item.id"
+              class="rounded-xl transition-shadow"
+              :class="
+                index === selectedIndex
+                  ? 'ring-2 ring-sky-500 ring-offset-2 ring-offset-white dark:ring-sky-400 dark:ring-offset-slate-950'
+                  : ''
+              "
+              @mouseenter="selectedIndex = index"
+            >
+              <BookmarkCard :item="item" :target="openTarget" />
             </div>
-          </a>
+          </div>
         </div>
 
         <div v-else>
@@ -85,7 +89,7 @@
             当前文件夹没有内容。你可以在书签栏添加常用网站，或在设置里切换入口文件夹。
           </div>
 
-          <div v-else class="grid gap-3" :style="gridStyle">
+          <div v-else class="grid items-start gap-3" :style="gridStyle">
             <FolderCard
               v-for="folder in bookmarksStore.currentFolders"
               :key="folder.id"
@@ -109,11 +113,10 @@
 </template>
 
 <script setup lang="ts">
-import { SettingOutlined } from '@ant-design/icons-vue';
+import { BookOutlined, SettingOutlined } from '@ant-design/icons-vue';
 import { useDebounce, useEventListener } from '@vueuse/core';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
-import BookmarkAvatar from '@/components/bookmarks/bookmark-avatar.vue';
 import BookmarkCard from '@/components/bookmarks/bookmark-card.vue';
 import FolderCard from '@/components/bookmarks/folder-card.vue';
 import BreadcrumbNav from '@/components/navigation/breadcrumb-nav.vue';
@@ -154,9 +157,9 @@ const isCurrentFolderEmpty = computed(() => {
 });
 
 const gridStyle = computed(() => {
-  // 先按用户设置渲染，范围由设置组件保证在 5~9
+  // 先按用户设置渲染，范围由设置组件保证在 2~9
   const raw = Number(settingsStore.settings.cardsPerRow ?? 5);
-  const cols = Number.isFinite(raw) ? Math.max(5, Math.min(9, Math.round(raw))) : 5;
+  const cols = Number.isFinite(raw) ? Math.max(2, Math.min(9, Math.round(raw))) : 5;
   return {
     gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
   };
@@ -183,6 +186,46 @@ function focusSearchInput() {
     searchInputRef.value?.focus();
   } catch {
     // ignore
+  }
+}
+
+function resetToInitialState() {
+  searchQuery.value = '';
+  selectedIndex.value = 0;
+  isSettingsOpen.value = false;
+  bookmarksStore.setCurrentFolder(settingsStore.settings.entryFolderId);
+  focusSearchInput();
+}
+
+async function handleOpenBookmarksManager() {
+  const managerUrl = 'chrome://bookmarks/';
+  const openedByApi = await openInExtensionTab(managerUrl);
+  if (openedByApi) return;
+
+  const opened = window.open(managerUrl, '_blank', 'noopener');
+  if (opened) return;
+  window.location.href = managerUrl;
+}
+
+async function openInExtensionTab(url: string): Promise<boolean> {
+  const tabsApi = globalThis.chrome?.tabs;
+  if (!tabsApi?.create) return false;
+
+  try {
+    return await new Promise<boolean>((resolve) => {
+      tabsApi.create({ url }, () => {
+        const runtimeError = globalThis.chrome?.runtime?.lastError;
+        if (runtimeError) {
+          logError('打开书签管理器失败（tabs.create）', runtimeError.message);
+          resolve(false);
+          return;
+        }
+        resolve(true);
+      });
+    });
+  } catch (error) {
+    logError('打开书签管理器失败（tabs.create）', error);
+    return false;
   }
 }
 
@@ -273,5 +316,3 @@ async function initPage() {
   }
 }
 </script>
-
-
