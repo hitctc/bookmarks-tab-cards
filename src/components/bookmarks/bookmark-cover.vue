@@ -34,6 +34,9 @@
             <span v-else>{{ segment.text }}</span>
           </template>
         </div>
+        <div v-if="displayUrl" class="mt-0.5 truncate text-[10px] leading-4 text-white/80" :title="displayUrl">
+          {{ displayUrl }}
+        </div>
       </div>
     </div>
   </div>
@@ -89,6 +92,10 @@ const pseudoPosterTitle = computed(() => {
   const d = (domain.value || '').trim();
   if (d) return d;
 
+  return (props.url || '').trim();
+});
+
+const displayUrl = computed(() => {
   return (props.url || '').trim();
 });
 
