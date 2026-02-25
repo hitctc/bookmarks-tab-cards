@@ -6,8 +6,8 @@
     rel="noopener noreferrer"
     :title="item.url"
   >
-    <div class="aspect-video bg-slate-100 dark:bg-slate-800">
-      <BookmarkCover :url="item.url" :title="item.title" />
+    <div class="aspect-[21/9] bg-slate-100 dark:bg-slate-800">
+      <BookmarkCover :url="item.url" :title="item.title" :highlight-query="highlightQuery" />
     </div>
   </a>
 </template>
@@ -17,9 +17,14 @@ import type { BookmarkIndexItem } from '@/types/bookmarks';
 
 import BookmarkCover from './bookmark-cover.vue';
 
-defineProps<{
-  item: BookmarkIndexItem;
-  target: '_self' | '_blank';
-}>();
+withDefaults(
+  defineProps<{
+    item: BookmarkIndexItem;
+    target: '_self' | '_blank';
+    highlightQuery?: string;
+  }>(),
+  {
+    highlightQuery: '',
+  }
+);
 </script>
-

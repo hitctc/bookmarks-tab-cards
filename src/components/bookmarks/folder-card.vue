@@ -4,7 +4,7 @@
     type="button"
     @click="handleOpen"
   >
-    <div class="relative aspect-video overflow-hidden" :style="coverStyle">
+    <div class="relative aspect-[21/9] overflow-hidden" :style="coverStyle">
       <div class="absolute inset-0 bg-gradient-to-b from-black/5 via-black/10 to-black/45" />
 
       <div
@@ -79,4 +79,3 @@ function handleOpen() {
   emit('open', props.folder.id);
 }
 </script>
-

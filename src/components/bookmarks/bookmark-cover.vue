@@ -2,24 +2,37 @@
   <div class="relative h-full w-full overflow-hidden" :style="pseudoCoverStyle">
     <div class="absolute inset-0 bg-gradient-to-b from-black/8 via-black/14 to-black/45" />
 
-    <div class="absolute inset-x-0 bottom-0 p-2.5">
-      <div class="flex items-center gap-2 rounded-md bg-white/14 px-2 py-1.5 backdrop-blur-sm">
-        <div class="flex h-5 w-5 items-center justify-center rounded bg-white/80" aria-hidden="true">
-          <img
-            v-if="!hasFaviconError"
-            class="h-4 w-4"
-            :src="faviconUrl"
-            :alt="title"
-            @load="handleFaviconLoad"
-            @error="handleFaviconError"
-          />
-          <span v-else class="text-[10px] font-bold text-slate-700">
-            {{ pseudoFallbackLetter }}
-          </span>
-        </div>
+    <div class="absolute left-2 top-2">
+      <div
+        class="flex h-8 w-8 items-center justify-center rounded-md bg-white/85 shadow-md ring-1 ring-black/10 backdrop-blur-sm"
+        aria-hidden="true"
+      >
+        <img
+          v-if="!hasFaviconError"
+          class="h-5 w-5"
+          :src="faviconUrl"
+          :alt="title"
+          @load="handleFaviconLoad"
+          @error="handleFaviconError"
+        />
+        <span v-else class="text-[11px] font-bold text-slate-700">
+          {{ pseudoFallbackLetter }}
+        </span>
+      </div>
+    </div>
 
-        <div class="poster-title min-w-0 flex-1 text-sm font-semibold text-white">
-          {{ pseudoPosterTitle }}
+    <div class="absolute inset-x-0 bottom-0 p-0">
+      <div class="rounded-md bg-white/14 px-2 py-1.5">
+        <div class="poster-title min-w-0 flex-1 text-xs font-semibold text-white">
+          <template v-for="(segment, index) in highlightedTitleSegments" :key="`${segment.text}-${index}`">
+            <mark
+              v-if="segment.isMatch"
+              class="rounded bg-amber-200/90 px-0.5 text-slate-900 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
+            >
+              {{ segment.text }}
+            </mark>
+            <span v-else>{{ segment.text }}</span>
+          </template>
         </div>
       </div>
     </div>
@@ -36,6 +49,7 @@ const faviconGradientCache = new Map<string, Record<string, string>>();
 const props = defineProps<{
   url: string;
   title: string;
+  highlightQuery?: string;
 }>();
 
 const faviconIndex = ref(0);
@@ -77,6 +91,15 @@ const pseudoPosterTitle = computed(() => {
 
   return (props.url || '').trim();
 });
+
+interface HighlightSegment {
+  text: string;
+  isMatch: boolean;
+}
+
+const highlightedTitleSegments = computed<HighlightSegment[]>(() =>
+  buildHighlightSegments(pseudoPosterTitle.value, props.highlightQuery || '')
+);
 
 const logoCoverStyle = ref<Record<string, string> | null>(null);
 
@@ -364,6 +387,58 @@ function buildPseudoCoverStyle(seed: string): Record<string, string> {
   return {
     backgroundImage: `linear-gradient(135deg, ${c1}, ${c2})`,
   };
+}
+
+function buildHighlightSegments(text: string, rawKeyword: string): HighlightSegment[] {
+  if (!text) return [];
+
+  const keywords = parseHighlightKeywords(rawKeyword);
+  if (keywords.length === 0) {
+    return [{ text, isMatch: false }];
+  }
+
+  const escaped = keywords.map(escapeRegExp);
+  if (escaped.length === 0) {
+    return [{ text, isMatch: false }];
+  }
+
+  const matcher = new RegExp(`(${escaped.join('|')})`, 'ig');
+  const lowerKeywordSet = new Set(keywords.map((item) => item.toLowerCase()));
+
+  return text
+    .split(matcher)
+    .filter((part) => part.length > 0)
+    .map((part) => ({
+      text: part,
+      isMatch: lowerKeywordSet.has(part.toLowerCase()),
+    }));
+}
+
+function parseHighlightKeywords(rawKeyword: string): string[] {
+  const parts = (rawKeyword || '')
+    .trim()
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  if (parts.length === 0) return [];
+
+  // 长关键词优先，避免短词提前匹配吞掉更长的高亮片段
+  parts.sort((a, b) => b.length - a.length);
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    deduped.push(part);
+  }
+  return deduped;
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 </script>
 

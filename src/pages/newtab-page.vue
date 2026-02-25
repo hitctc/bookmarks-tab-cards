@@ -16,7 +16,7 @@
           ref="searchInputRef"
           v-model:value="searchQuery"
           allow-clear
-          placeholder="搜索书签（标题 / 域名 / URL）"
+          :placeholder="searchPlaceholder"
           @keydown="handleSearchKeydown"
         />
 
@@ -76,7 +76,7 @@
               "
               @mouseenter="selectedIndex = index"
             >
-              <BookmarkCard :item="item" :target="openTarget" />
+              <BookmarkCard :item="item" :target="openTarget" :highlight-query="debouncedTrimmedSearchQuery" />
             </div>
           </div>
         </div>
@@ -132,13 +132,17 @@ interface FocusableInput {
 
 const settingsStore = useSettingsStore();
 const bookmarksStore = useBookmarksStore();
+const isMacPlatform = /Mac|iPhone|iPad|iPod/i.test(globalThis.navigator?.platform || '');
+const SEARCH_FOCUS_SHORTCUT_LABEL = isMacPlatform ? 'Cmd + K' : 'Ctrl + K';
 
 const isSettingsOpen = ref(false);
 const searchInputRef = ref<FocusableInput | null>(null);
 
 const searchQuery = ref('');
+const searchPlaceholder = `搜索书签（标题 / 域名 / URL，${SEARCH_FOCUS_SHORTCUT_LABEL} 聚焦）`;
 const debouncedSearchQuery = useDebounce(searchQuery, 120);
 const trimmedSearchQuery = computed(() => searchQuery.value.trim());
+const debouncedTrimmedSearchQuery = computed(() => debouncedSearchQuery.value.trim());
 
 const openTarget = computed(() => (settingsStore.settings.openBehavior === 'newTab' ? '_blank' : '_self'));
 
@@ -187,6 +191,22 @@ function focusSearchInput() {
   } catch {
     // ignore
   }
+}
+
+function isScrolledToBottom(): boolean {
+  const doc = document.documentElement;
+  const scrollTop = window.scrollY || doc.scrollTop || 0;
+  const viewportHeight = window.innerHeight || doc.clientHeight || 0;
+  const scrollHeight = Math.max(doc.scrollHeight, document.body?.scrollHeight ?? 0);
+  const remaining = scrollHeight - (scrollTop + viewportHeight);
+  return remaining <= 2;
+}
+
+function handleFocusSearchShortcut() {
+  if (isScrolledToBottom()) {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+  focusSearchInput();
 }
 
 function resetToInitialState() {
@@ -294,10 +314,15 @@ watch(
 );
 
 useEventListener(window, 'keydown', (event) => {
-  const key = event.key.toLowerCase();
-  if ((event.ctrlKey || event.metaKey) && key === 'k') {
+  // 用 event.code 识别物理按键位，避免不同布局/输入法导致的 event.key 差异。
+  const isModifierMatched = isMacPlatform
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey;
+  const isSearchFocusShortcut =
+    isModifierMatched && !event.altKey && !event.shiftKey && event.code === 'KeyK';
+  if (isSearchFocusShortcut) {
     event.preventDefault();
-    focusSearchInput();
+    handleFocusSearchShortcut();
   }
 });
 

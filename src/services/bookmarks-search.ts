@@ -7,16 +7,69 @@ interface ScoredBookmarkItem {
   index: number;
 }
 
-function calculateMatchScore(item: BookmarkIndexItem, keyword: string): number {
+function calculateMatchScore(
+  item: BookmarkIndexItem,
+  keywords: string[],
+  fullKeyword: string
+): number {
   const title = item.title.toLowerCase();
   const domain = item.domain.toLowerCase();
   const url = item.url.toLowerCase();
 
-  if (title.startsWith(keyword)) return 400;
-  if (title.includes(keyword)) return 300;
-  if (domain.includes(keyword)) return 200;
-  if (url.includes(keyword)) return 100;
-  return 0;
+  let score = 0;
+
+  for (const keyword of keywords) {
+    if (title.startsWith(keyword)) {
+      score += 400;
+      continue;
+    }
+    if (title.includes(keyword)) {
+      score += 300;
+      continue;
+    }
+    if (domain.includes(keyword)) {
+      score += 200;
+      continue;
+    }
+    if (url.includes(keyword)) {
+      score += 100;
+    }
+  }
+
+  // 额外给“完整短语命中”一点加权，避免多词时排序过于离散。
+  if (fullKeyword && title.includes(fullKeyword)) {
+    score += 120;
+  } else if (fullKeyword && domain.includes(fullKeyword)) {
+    score += 80;
+  } else if (fullKeyword && url.includes(fullKeyword)) {
+    score += 40;
+  }
+
+  return score;
+}
+
+function parseKeywords(rawKeyword: string): string[] {
+  const normalized = normalizeSearchText(rawKeyword);
+  if (!normalized) return [];
+
+  const tokens = normalized.split(' ').filter((part) => part.length > 0);
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+
+  for (const token of tokens) {
+    if (seen.has(token)) continue;
+    seen.add(token);
+    deduped.push(token);
+  }
+
+  return deduped;
+}
+
+function containsAllKeywords(text: string, keywords: string[]): boolean {
+  for (const keyword of keywords) {
+    if (!text.includes(keyword)) return false;
+  }
+  return true;
 }
 
 export function searchBookmarkItems(
@@ -24,19 +77,22 @@ export function searchBookmarkItems(
   rawKeyword: string,
   limit = 120
 ): BookmarkIndexItem[] {
-  const keyword = normalizeSearchText(rawKeyword);
-  if (!keyword) return [];
+  const fullKeyword = normalizeSearchText(rawKeyword);
+  if (!fullKeyword) return [];
+
+  const keywords = parseKeywords(fullKeyword);
+  if (keywords.length === 0) return [];
 
   const maxLimit = Number.isFinite(limit) ? Math.max(10, Math.min(500, limit)) : 120;
   const matched: ScoredBookmarkItem[] = [];
 
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
-    if (!item.searchText.includes(keyword)) continue;
+    if (!containsAllKeywords(item.searchText, keywords)) continue;
 
     matched.push({
       item,
-      score: calculateMatchScore(item, keyword),
+      score: calculateMatchScore(item, keywords, fullKeyword),
       index: i,
     });
   }
@@ -44,5 +100,4 @@ export function searchBookmarkItems(
   matched.sort((a, b) => b.score - a.score || a.index - b.index);
   return matched.slice(0, maxLimit).map((x) => x.item);
 }
-
 

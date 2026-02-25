@@ -43,7 +43,7 @@
   - 面包屑与“返回上级”都通过 store action 更新当前目录。
 - 搜索链路：
   - 输入框关键词（120ms 防抖）-> `searchBookmarkItems`。
-  - 支持 `ArrowUp/ArrowDown/Enter/Escape` 与 `Ctrl/Cmd + K` 聚焦。
+  - 支持 `ArrowUp/ArrowDown/Enter/Escape` 与 `Cmd + K`（macOS）/ `Ctrl + K`（Windows）聚焦。
 - 设置链路：
   - `settings-drawer` 更新 `entryFolderId/themeMode/openBehavior/cardsPerRow`。
   - `settings-store` 统一 merge + clamp + 持久化；`themeMode` 通过 `dark` class 驱动深浅色。
