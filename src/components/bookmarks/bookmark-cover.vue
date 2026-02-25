@@ -96,7 +96,7 @@ const pseudoPosterTitle = computed(() => {
 });
 
 const displayUrl = computed(() => {
-  return (props.url || '').trim();
+  return (domain.value || '').trim();
 });
 
 interface HighlightSegment {
