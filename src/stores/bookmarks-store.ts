@@ -6,6 +6,7 @@ import {
   buildBookmarkIndex,
   createFolder as createFolderInService,
   deleteBookmark as deleteBookmarkInService,
+  deleteFolder as deleteFolderInService,
   fetchBookmarksTree,
   updateFolder as updateFolderInService,
   updateBookmark as updateBookmarkInService,
@@ -401,6 +402,22 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     }
   }
 
+  async function deleteFolder(folderId: string, entryFolderId: string): Promise<boolean> {
+    try {
+      hasError.value = false;
+      errorMessage.value = null;
+      await deleteFolderInService(folderId);
+      await refreshFromChrome(entryFolderId);
+      if (hasError.value) return false;
+      return true;
+    } catch (error) {
+      hasError.value = true;
+      errorMessage.value = '目录删除失败';
+      logError('目录删除失败', error);
+      return false;
+    }
+  }
+
   async function createFolder(payload: CreateFolderPayload, entryFolderId: string): Promise<boolean> {
     try {
       hasError.value = false;
@@ -479,6 +496,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     refreshFromChrome,
     updateBookmark,
     deleteBookmark,
+    deleteFolder,
     createFolder,
     updateFolder,
     loadCache,

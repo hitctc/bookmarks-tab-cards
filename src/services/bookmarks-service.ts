@@ -9,6 +9,7 @@ import {
   moveMockBookmark,
   moveMockFolder,
   removeMockBookmark,
+  removeMockFolder,
   updateMockBookmark,
   updateMockFolder,
 } from './mock-bookmarks';
@@ -342,6 +343,36 @@ export async function deleteBookmark(bookmarkId: string): Promise<void> {
   return await new Promise<void>((resolve, reject) => {
     try {
       chrome.bookmarks.remove(bookmarkId, () => {
+        const lastError = chrome.runtime?.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
+        resolve();
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export async function deleteFolder(folderId: string): Promise<void> {
+  if (!folderId) {
+    throw new Error('缺少目录 ID，无法删除');
+  }
+
+  if (!isChromeBookmarksRemoveAvailable()) {
+    const ok = removeMockFolder(folderId);
+    if (!ok) {
+      throw new Error('目录不存在或非空，无法删除');
+    }
+    logInfo('mock 目录删除完成', { folderId });
+    return;
+  }
+
+  return await new Promise<void>((resolve, reject) => {
+    try {
+      chrome.bookmarks.remove(folderId, () => {
         const lastError = chrome.runtime?.lastError;
         if (lastError) {
           reject(new Error(lastError.message));

@@ -161,10 +161,16 @@
     >
       <a-form layout="vertical">
         <a-form-item label="当前路径">
-          <div
-            class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+          <button
+            type="button"
+            :disabled="isEditSaving"
+            class="w-full cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs text-slate-600 transition hover:border-sky-300 hover:bg-sky-50/40 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:bg-sky-900/20"
+            @click="handleJumpToEditBookmarkFolder"
           >
             {{ editBookmarkPath }}
+          </button>
+          <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            点击可跳转到该目录
           </div>
         </a-form-item>
 
@@ -237,12 +243,8 @@
     <a-modal
       :open="isEditFolderModalOpen"
       title="编辑目录"
-      ok-text="保存"
-      cancel-text="取消"
-      :confirm-loading="isEditFolderSaving"
       :mask-closable="!isEditFolderSaving"
       @cancel="handleCancelEditFolder"
-      @ok="handleConfirmEditFolder"
     >
       <a-form layout="vertical">
         <a-form-item label="当前路径">
@@ -288,6 +290,30 @@
           {{ editFolderFormError }}
         </div>
       </a-form>
+
+      <template #footer>
+        <div class="flex items-center justify-between gap-3">
+          <a-popconfirm
+            title="确认删除这个目录吗？"
+            description="仅支持删除空目录，删除后无法恢复。"
+            ok-text="确认删除"
+            cancel-text="取消"
+            :disabled="isEditFolderSaving || !canDeleteCurrentFolder"
+            @confirm="handleConfirmDeleteFolder"
+          >
+            <a-button danger :disabled="isEditFolderSaving" @click="handleDeleteFolderButtonClick">
+              删除目录
+            </a-button>
+          </a-popconfirm>
+
+          <div class="flex items-center gap-2">
+            <a-button :disabled="isEditFolderSaving" @click="handleCancelEditFolder">取消</a-button>
+            <a-button type="primary" :loading="isEditFolderSaving" @click="handleConfirmEditFolder">
+              保存
+            </a-button>
+          </div>
+        </div>
+      </template>
     </a-modal>
 
     <a-modal
@@ -388,6 +414,7 @@ const createFolderFormError = ref('');
 const editForm = ref({
   bookmarkId: '',
   folderPath: '',
+  originalParentId: '',
   parentId: '',
   title: '',
   url: '',
@@ -476,6 +503,16 @@ const selectedEditFolderParentPath = computed(() => {
 const editFolderParent = computed(() =>
   bookmarksStore.folderNodes.find((node) => node.id === editFolderForm.value.parentId.trim())
 );
+
+const currentEditingFolder = computed(() =>
+  bookmarksStore.folderNodes.find((node) => node.id === editFolderForm.value.folderId.trim())
+);
+
+const canDeleteCurrentFolder = computed(() => {
+  const folder = currentEditingFolder.value;
+  if (!folder) return false;
+  return folder.childFolderIds.length === 0 && folder.childBookmarkIds.length === 0;
+});
 
 const editFolderPositionMax = computed(() => {
   const parent = editFolderParent.value;
@@ -579,6 +616,7 @@ function resetEditForm() {
   editForm.value = {
     bookmarkId: '',
     folderPath: '',
+    originalParentId: '',
     parentId: '',
     title: '',
     url: '',
@@ -613,6 +651,7 @@ function handleStartEditBookmark(item: BookmarkIndexItem) {
   editForm.value = {
     bookmarkId: item.id,
     folderPath: item.folderPath,
+    originalParentId: item.parentId ?? '',
     parentId: item.parentId ?? '',
     title: item.title,
     url: item.url,
@@ -623,6 +662,27 @@ function handleStartEditBookmark(item: BookmarkIndexItem) {
     positionInput: '',
   };
   isEditModalOpen.value = true;
+}
+
+function handleJumpToEditBookmarkFolder() {
+  if (isEditSaving.value) return;
+
+  const folderId = editForm.value.originalParentId.trim() || editForm.value.parentId.trim();
+  if (!folderId) {
+    message.warning('当前书签未关联目录');
+    return;
+  }
+
+  const ok = bookmarksStore.setCurrentFolder(folderId);
+  if (!ok) {
+    message.warning('目标目录不存在，可能已被删除');
+    return;
+  }
+
+  searchQuery.value = '';
+  selectedIndex.value = -1;
+  isEditModalOpen.value = false;
+  resetEditForm();
 }
 
 async function handleToggleBookmarkPin(item: BookmarkIndexItem) {
@@ -726,6 +786,12 @@ function handleCancelEditFolder() {
   resetEditFolderForm();
 }
 
+function handleDeleteFolderButtonClick() {
+  if (isEditFolderSaving.value) return;
+  if (canDeleteCurrentFolder.value) return;
+  message.warning('目录非空，不能删除');
+}
+
 async function handleConfirmEditFolder() {
   const folderId = editFolderForm.value.folderId;
   const title = editFolderForm.value.title.trim();
@@ -790,6 +856,37 @@ async function handleConfirmEditFolder() {
     }
 
     message.success('目录更新成功');
+    isEditFolderModalOpen.value = false;
+    resetEditFolderForm();
+  } finally {
+    isEditFolderSaving.value = false;
+  }
+}
+
+async function handleConfirmDeleteFolder() {
+  const folderId = editFolderForm.value.folderId.trim();
+  if (!folderId) {
+    editFolderFormError.value = '未选择可删除的目录';
+    return;
+  }
+  if (!canDeleteCurrentFolder.value) {
+    message.warning('目录非空，不能删除');
+    return;
+  }
+
+  editFolderFormError.value = '';
+  isEditFolderSaving.value = true;
+  try {
+    const ok = await bookmarksStore.deleteFolder(
+      folderId,
+      bookmarksStore.currentFolderId || settingsStore.settings.entryFolderId
+    );
+    if (!ok) {
+      editFolderFormError.value = bookmarksStore.errorMessage || '目录删除失败';
+      return;
+    }
+
+    message.success('目录删除成功');
     isEditFolderModalOpen.value = false;
     resetEditFolderForm();
   } finally {

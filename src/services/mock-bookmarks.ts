@@ -325,3 +325,31 @@ export function removeMockBookmark(bookmarkId: string): boolean {
   const runtimeTree = ensureRuntimeMockTree();
   return removeBookmarkNodeById(runtimeTree, bookmarkId);
 }
+
+function removeFolderNodeById(
+  nodes: chrome.bookmarks.BookmarkTreeNode[],
+  folderId: string
+): boolean {
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    if (node.id === folderId && Array.isArray(node.children)) {
+      if (node.parentId == null) return false;
+      if (node.children.length > 0) return false;
+      nodes.splice(i, 1);
+      return true;
+    }
+
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      const removed = removeFolderNodeById(node.children, folderId);
+      if (removed) return true;
+    }
+  }
+
+  return false;
+}
+
+export function removeMockFolder(folderId: string): boolean {
+  if (!folderId) return false;
+  const runtimeTree = ensureRuntimeMockTree();
+  return removeFolderNodeById(runtimeTree, folderId);
+}
