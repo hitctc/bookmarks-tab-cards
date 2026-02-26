@@ -95,6 +95,8 @@
                 :target="openTarget"
                 :highlight-query="debouncedTrimmedSearchQuery"
                 @edit="handleStartEditBookmark"
+                :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
+                @toggle-pin="handleToggleBookmarkPin"
               />
             </div>
           </div>
@@ -108,22 +110,44 @@
             当前文件夹没有内容。你可以在书签栏添加常用网站，或在设置里切换入口文件夹。
           </div>
 
-          <div v-else class="grid items-start gap-3" :style="gridStyle">
-            <FolderCard
-              v-for="folder in bookmarksStore.currentFolders"
-              :key="folder.id"
-              :folder="folder"
-              @open="bookmarksStore.goToFolder"
-              @edit="handleStartEditFolder"
-            />
+          <div v-else class="space-y-4">
+            <section v-if="bookmarksStore.currentFolders.length > 0" class="space-y-2">
+              <div
+                v-if="bookmarksStore.currentBookmarks.length > 0"
+                class="px-1 text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400"
+              >
+                目录
+              </div>
+              <div class="grid items-start gap-3" :style="gridStyle">
+                <FolderCard
+                  v-for="folder in bookmarksStore.currentFolders"
+                  :key="folder.id"
+                  :folder="folder"
+                  @open="bookmarksStore.goToFolder"
+                  @edit="handleStartEditFolder"
+                />
+              </div>
+            </section>
 
-            <BookmarkCard
-              v-for="item in bookmarksStore.currentBookmarks"
-              :key="item.id"
-              :item="item"
-              :target="openTarget"
-              @edit="handleStartEditBookmark"
-            />
+            <section v-if="bookmarksStore.currentBookmarks.length > 0" class="space-y-2">
+              <div
+                v-if="bookmarksStore.currentFolders.length > 0"
+                class="px-1 text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400"
+              >
+                书签
+              </div>
+              <div class="grid items-start gap-3" :style="gridStyle">
+                <BookmarkCard
+                  v-for="item in bookmarksStore.currentBookmarks"
+                  :key="item.id"
+                  :item="item"
+                  :target="openTarget"
+                  @edit="handleStartEditBookmark"
+                  :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
+                  @toggle-pin="handleToggleBookmarkPin"
+                />
+              </div>
+            </section>
           </div>
         </div>
       </a-spin>
@@ -599,6 +623,17 @@ function handleStartEditBookmark(item: BookmarkIndexItem) {
     positionInput: '',
   };
   isEditModalOpen.value = true;
+}
+
+async function handleToggleBookmarkPin(item: BookmarkIndexItem) {
+  const wasPinned = bookmarksStore.isBookmarkPinned(item.id);
+  const ok = await bookmarksStore.toggleBookmarkPin(item.id);
+  if (!ok) {
+    message.error('置顶状态更新失败');
+    return;
+  }
+
+  message.success(wasPinned ? '已取消置顶' : '已置顶');
 }
 
 function handleStartEditFolder(folder: BookmarkFolderNode) {

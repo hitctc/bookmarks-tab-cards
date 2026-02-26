@@ -19,7 +19,7 @@
   - 持久化：优先 `chrome.storage.local`，开发态回退 `localStorage`（`src/services/storage-service.ts`）。
 
 ## 目录与模块地图
-- `src/pages/newtab-page.vue`：新标签页主视图，负责搜索、快捷键、错误态、书签网格、设置抽屉开关。
+- `src/pages/newtab-page.vue`：新标签页主视图，负责搜索、快捷键、错误态、书签网格、设置抽屉开关与书签置顶交互。
 - `src/components/bookmarks/*`：书签/文件夹卡片、头像与封面渲染（含 favicon 与渐变兜底逻辑）。
 - `src/components/navigation/breadcrumb-nav.vue`：面包屑与返回上级交互。
 - `src/components/settings/settings-drawer.vue`：入口文件夹、主题、打开方式、每行卡片数、手动刷新。
@@ -41,6 +41,7 @@
 - 导航链路：
   - `currentFolderId` -> `breadcrumbFolders/currentFolders/currentBookmarks`。
   - 面包屑与“返回上级”都通过 store action 更新当前目录。
+  - `currentBookmarks` 会优先展示置顶书签，多条置顶按置顶时间升序。
 - 搜索链路：
   - 输入框关键词（120ms 防抖）-> `searchBookmarkItems`。
   - 支持 `ArrowUp/ArrowDown/Enter/Escape` 与 `Cmd + K`（macOS）/ `Ctrl + K`（Windows）聚焦。

@@ -17,6 +17,8 @@ import { getFromStorage, removeFromStorage, setToStorage } from '@/services/stor
 import type { BookmarkCachePayload, BookmarkFolderNode, BookmarkIndexItem } from '@/types/bookmarks';
 import { logError, logInfo } from '@/utils/logger';
 
+type BookmarkPinMap = Record<string, number>;
+
 function buildFolderMap(folderNodes: BookmarkFolderNode[]): Record<string, BookmarkFolderNode> {
   const map: Record<string, BookmarkFolderNode> = {};
   for (const node of folderNodes) {
@@ -110,6 +112,68 @@ function buildFolderTreeOptions(
   return rootChildren;
 }
 
+function normalizeBookmarkPinMap(raw: unknown): BookmarkPinMap {
+  if (!raw || typeof raw !== 'object') return {};
+
+  const parsed = raw as Record<string, unknown>;
+  const normalized: BookmarkPinMap = {};
+  for (const [bookmarkId, pinnedAtValue] of Object.entries(parsed)) {
+    const pinnedAt = Number(pinnedAtValue);
+    if (!bookmarkId || !Number.isFinite(pinnedAt) || pinnedAt <= 0) continue;
+    normalized[bookmarkId] = Math.floor(pinnedAt);
+  }
+
+  return normalized;
+}
+
+function cleanupBookmarkPinMap(pinMap: BookmarkPinMap, bookmarkItems: BookmarkIndexItem[]): BookmarkPinMap {
+  if (Object.keys(pinMap).length === 0) return {};
+  if (bookmarkItems.length === 0) return {};
+
+  const validBookmarkIds = new Set(bookmarkItems.map((item) => item.id));
+  const cleaned: BookmarkPinMap = {};
+  for (const [bookmarkId, pinnedAt] of Object.entries(pinMap)) {
+    if (!validBookmarkIds.has(bookmarkId)) continue;
+    cleaned[bookmarkId] = pinnedAt;
+  }
+  return cleaned;
+}
+
+function isBookmarkPinMapEqual(a: BookmarkPinMap, b: BookmarkPinMap): boolean {
+  const aEntries = Object.entries(a);
+  const bEntries = Object.entries(b);
+  if (aEntries.length !== bEntries.length) return false;
+
+  for (const [bookmarkId, pinnedAt] of aEntries) {
+    if (b[bookmarkId] !== pinnedAt) return false;
+  }
+  return true;
+}
+
+function sortBookmarksByPinTime(items: BookmarkIndexItem[], pinMap: BookmarkPinMap): BookmarkIndexItem[] {
+  if (items.length <= 1) return items;
+
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      pinnedAt: Number(pinMap[item.id] ?? 0),
+    }))
+    .sort((a, b) => {
+      const aPinned = a.pinnedAt > 0;
+      const bPinned = b.pinnedAt > 0;
+
+      if (aPinned && bPinned) {
+        if (a.pinnedAt !== b.pinnedAt) return a.pinnedAt - b.pinnedAt;
+        return a.index - b.index;
+      }
+
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
+}
+
 export const useBookmarksStore = defineStore('bookmarks', () => {
   const isReady = ref(false);
   const isLoading = ref(false);
@@ -121,6 +185,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
 
   const folderMap = ref<Record<string, BookmarkFolderNode>>({});
   const bookmarkMap = ref<Record<string, BookmarkIndexItem>>({});
+  const pinnedBookmarkMap = ref<BookmarkPinMap>({});
 
   const currentFolderId = ref<string>('1');
   const lastUpdatedAt = ref<number | null>(null);
@@ -150,9 +215,10 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   const currentBookmarks = computed(() => {
     const folder = currentFolder.value;
     if (!folder) return [];
-    return folder.childBookmarkIds
+    const items = folder.childBookmarkIds
       .map((id: string) => bookmarkMap.value[id])
       .filter((item): item is BookmarkIndexItem => Boolean(item));
+    return sortBookmarksByPinTime(items, pinnedBookmarkMap.value);
   });
 
   const folderTreeOptions = computed(() => {
@@ -177,6 +243,54 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     setCurrentFolder(folder.parentId);
   }
 
+  function isBookmarkPinned(bookmarkId: string): boolean {
+    const safeId = bookmarkId.trim();
+    if (!safeId) return false;
+    return Number(pinnedBookmarkMap.value[safeId] ?? 0) > 0;
+  }
+
+  async function loadBookmarkPins(): Promise<void> {
+    try {
+      const stored = await getFromStorage<unknown>(STORAGE_KEYS.bookmarkPins);
+      pinnedBookmarkMap.value = normalizeBookmarkPinMap(stored);
+    } catch (error) {
+      pinnedBookmarkMap.value = {};
+      logError('读取书签置顶状态失败', error);
+    }
+  }
+
+  async function syncBookmarkPinsWithItems(): Promise<void> {
+    const cleaned = cleanupBookmarkPinMap(pinnedBookmarkMap.value, bookmarkItems.value);
+    if (isBookmarkPinMapEqual(cleaned, pinnedBookmarkMap.value)) return;
+
+    pinnedBookmarkMap.value = cleaned;
+    const ok = await setToStorage(STORAGE_KEYS.bookmarkPins, cleaned);
+    if (!ok) {
+      logError('清理无效书签置顶状态失败');
+    }
+  }
+
+  async function toggleBookmarkPin(bookmarkId: string): Promise<boolean> {
+    const safeId = bookmarkId.trim();
+    if (!safeId || !bookmarkMap.value[safeId]) return false;
+
+    const previous = pinnedBookmarkMap.value;
+    const next: BookmarkPinMap = { ...previous };
+    if (next[safeId]) {
+      delete next[safeId];
+    } else {
+      next[safeId] = Date.now();
+    }
+
+    pinnedBookmarkMap.value = next;
+    const ok = await setToStorage(STORAGE_KEYS.bookmarkPins, next);
+    if (ok) return true;
+
+    pinnedBookmarkMap.value = previous;
+    logError('保存书签置顶状态失败');
+    return false;
+  }
+
   async function loadCache(entryFolderId: string): Promise<void> {
     try {
       const cached = await getFromStorage<BookmarkCachePayload>(STORAGE_KEYS.bookmarksCache);
@@ -193,6 +307,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       bookmarkItems.value = cached.bookmarkItems;
       folderMap.value = buildFolderMap(folderNodes.value);
       bookmarkMap.value = buildBookmarkMap(bookmarkItems.value);
+      await syncBookmarkPinsWithItems();
       lastUpdatedAt.value = cached.generatedAt ?? null;
 
       const ok = setCurrentFolder(entryFolderId);
@@ -225,6 +340,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       bookmarkItems.value = built.bookmarkItems;
       folderMap.value = buildFolderMap(folderNodes.value);
       bookmarkMap.value = buildBookmarkMap(bookmarkItems.value);
+      await syncBookmarkPinsWithItems();
 
       const cachePayload = toCachePayload(folderNodes.value, bookmarkItems.value);
       await setToStorage(STORAGE_KEYS.bookmarksCache, cachePayload);
@@ -323,6 +439,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
 
   async function bootstrap(entryFolderId: string): Promise<void> {
     try {
+      await loadBookmarkPins();
       await loadCache(entryFolderId);
     } catch (error) {
       // loadCache 内部已兜底，这里再保险一次，确保 initPage 不会因为缓存炸掉
@@ -352,6 +469,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     currentFolders,
     currentBookmarks,
     folderTreeOptions,
+    isBookmarkPinned,
 
     // actions
     setCurrentFolder,
@@ -364,5 +482,6 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     createFolder,
     updateFolder,
     loadCache,
+    toggleBookmarkPin,
   };
 });

@@ -9,6 +9,7 @@
         <div class="absolute inset-0 bg-gradient-to-b from-black/5 via-black/10 to-black/45" />
 
         <div
+          v-if="countBadge"
           class="absolute right-2 top-2 rounded-md bg-white/80 px-2 py-0.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur dark:bg-slate-900/70 dark:text-slate-100"
         >
           {{ countBadge }}
@@ -60,7 +61,10 @@ const folderTitle = computed(() => {
 const countBadge = computed(() => {
   const folderCount = props.folder.childFolderIds.length;
   const bookmarkCount = props.folder.childBookmarkIds.length;
-  return `夹:${folderCount}/书签:${bookmarkCount}`;
+  const tokens: string[] = [];
+  if (folderCount > 0) tokens.push(`夹:${folderCount}`);
+  if (bookmarkCount > 0) tokens.push(`书签:${bookmarkCount}`);
+  return tokens.join('/');
 });
 
 const coverStyle = computed(() => buildFolderCoverStyle(`${props.folder.id}:${folderTitle.value}`));
