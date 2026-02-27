@@ -73,7 +73,7 @@
       <a-spin :spinning="bookmarksStore.isLoading && !bookmarksStore.isReady">
         <div v-if="isSearchMode">
           <div class="mb-2 px-1 text-xs text-slate-500 dark:text-slate-400">
-            Enter 打开 · {{ SEARCH_OPEN_IN_NEW_TAB_SHORTCUT_LABEL }} 新标签打开
+            仅支持 {{ SEARCH_OPEN_IN_NEW_TAB_SHORTCUT_LABEL }} 新标签打开
           </div>
 
           <div
@@ -109,21 +109,78 @@
                 :href="item.url"
                 :target="openTarget"
                 rel="noopener noreferrer"
-                class="flex items-start gap-3"
+                class="flex items-start gap-3 pr-20"
                 :title="item.url"
                 @click="handleBookmarkOpen(item)"
               >
                 <BookmarkAvatar :url="item.url" :title="item.title" :domain="item.domain" :size="28" />
                 <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ item.title }}</div>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <div class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ item.title }}</div>
+                    <span
+                      v-if="bookmarksStore.isBookmarkPinned(item.id)"
+                      class="inline-flex h-5 shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 text-[10px] font-medium text-amber-700 dark:bg-amber-300/15 dark:text-amber-200"
+                    >
+                      <PushpinFilled class="text-[10px]" />
+                      <span>置顶</span>
+                    </span>
+                  </div>
                   <div class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                     {{ item.domain || item.url }}
                   </div>
-                  <div class="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
-                    {{ item.folderPath || '根目录' }}
+                  <div class="mt-0.5 pr-12 text-[11px]">
+                    <span class="block truncate text-slate-400 dark:text-slate-500">
+                      {{ item.folderPath || '根目录' }}
+                    </span>
                   </div>
                 </div>
               </a>
+
+              <span
+                v-if="settingsStore.settings.showOpenCount"
+                class="pointer-events-none absolute bottom-2 right-3 z-[1] tabular-nums text-[11px] text-slate-500 dark:text-slate-400"
+                :title="`打开次数：${getBookmarkOpenCount(item.id)}`"
+              >
+                {{ getBookmarkOpenCount(item.id) }}
+              </span>
+
+              <div
+                class="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 transition-opacity duration-150"
+                :class="
+                  index === selectedIndex
+                    ? 'pointer-events-auto opacity-100'
+                    : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'
+                "
+              >
+                <button
+                  type="button"
+                  :title="bookmarksStore.isBookmarkPinned(item.id) ? '取消置顶' : '置顶书签'"
+                  :aria-label="bookmarksStore.isBookmarkPinned(item.id) ? '取消置顶' : '置顶书签'"
+                  class="inline-flex h-7 items-center justify-center rounded-md shadow-sm ring-1 ring-black/10 backdrop-blur-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950"
+                  :class="
+                    bookmarksStore.isBookmarkPinned(item.id)
+                      ? 'gap-1 bg-amber-100/95 px-2 text-amber-700 dark:bg-amber-200/20 dark:text-amber-200'
+                      : 'w-7 bg-white/92 text-slate-700 hover:bg-white dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-slate-900'
+                  "
+                  @click="handleSearchListTogglePin(item, $event)"
+                >
+                  <template v-if="bookmarksStore.isBookmarkPinned(item.id)">
+                    <PushpinFilled />
+                    <span class="text-[11px] font-medium leading-none">置顶</span>
+                  </template>
+                  <PushpinOutlined v-else />
+                </button>
+
+                <button
+                  type="button"
+                  title="编辑书签"
+                  aria-label="编辑书签"
+                  class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/92 text-slate-700 shadow-sm ring-1 ring-black/10 backdrop-blur-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-slate-900 dark:focus-visible:ring-offset-slate-950"
+                  @click="handleSearchListEdit(item, $event)"
+                >
+                  <EditOutlined />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -144,6 +201,8 @@
                 :highlight-query="debouncedTrimmedSearchQuery"
                 @edit="handleStartEditBookmark"
                 :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
+                :open-count="getBookmarkOpenCount(item.id)"
+                :show-open-count="settingsStore.settings.showOpenCount"
                 @toggle-pin="handleToggleBookmarkPin"
                 @open="handleBookmarkOpen"
               />
@@ -183,6 +242,8 @@
                   :target="openTarget"
                   @edit="handleStartEditBookmark"
                   :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
+                  :open-count="getBookmarkOpenCount(item.id)"
+                  :show-open-count="settingsStore.settings.showOpenCount"
                   @toggle-pin="handleToggleBookmarkPin"
                   @open="handleBookmarkOpen"
                 />
@@ -222,6 +283,8 @@
                   :target="openTarget"
                   @edit="handleStartEditBookmark"
                   :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
+                  :open-count="getBookmarkOpenCount(item.id)"
+                  :show-open-count="settingsStore.settings.showOpenCount"
                   @toggle-pin="handleToggleBookmarkPin"
                   @open="handleBookmarkOpen"
                 />
@@ -449,7 +512,7 @@
 </template>
 
 <script setup lang="ts">
-import { BookOutlined, SettingOutlined } from '@ant-design/icons-vue';
+import { BookOutlined, EditOutlined, PushpinFilled, PushpinOutlined, SettingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { useDebounce, useEventListener } from '@vueuse/core';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -1143,15 +1206,9 @@ async function openInExtensionTab(url: string): Promise<boolean> {
   }
 }
 
-function openBookmarkWithTarget(item: BookmarkIndexItem, target: '_self' | '_blank') {
+function openBookmarkInNewTabOnly(item: BookmarkIndexItem) {
   void bookmarksStore.recordBookmarkOpened(item.id);
-
-  if (target === '_blank') {
-    const opened = window.open(item.url, '_blank', 'noopener');
-    if (opened) return;
-  }
-
-  window.location.href = item.url;
+  window.open(item.url, '_blank', 'noopener');
 }
 
 function getActiveSearchItem(): BookmarkIndexItem | null {
@@ -1165,8 +1222,27 @@ function getActiveSearchItem(): BookmarkIndexItem | null {
   return items[0] ?? null;
 }
 
+function getBookmarkOpenCount(bookmarkId: string): number {
+  const record = bookmarksStore.getBookmarkRecentOpenRecord(bookmarkId);
+  const count = Number(record?.openCount ?? 0);
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return Math.floor(count);
+}
+
 function handleBookmarkOpen(item: BookmarkIndexItem) {
   void bookmarksStore.recordBookmarkOpened(item.id);
+}
+
+function handleSearchListTogglePin(item: BookmarkIndexItem, event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  void handleToggleBookmarkPin(item);
+}
+
+function handleSearchListEdit(item: BookmarkIndexItem, event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  handleStartEditBookmark(item);
 }
 
 function handleSearchKeydown(event: KeyboardEvent) {
@@ -1186,20 +1262,24 @@ function handleSearchKeydown(event: KeyboardEvent) {
     return;
   }
 
-  if (event.key === 'Enter') {
-    const selected = getActiveSearchItem();
-    if (!selected) return;
-
-    event.preventDefault();
-    const forceNewTab = event.metaKey || event.ctrlKey;
-    openBookmarkWithTarget(selected, forceNewTab ? '_blank' : openTarget.value);
-    return;
-  }
-
   if (event.key === 'Escape') {
     event.preventDefault();
     searchQuery.value = '';
     selectedIndex.value = -1;
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    // 阻止输入框默认提交/冒泡行为，避免当前页被覆盖跳转。
+    event.preventDefault();
+    event.stopPropagation();
+
+    const forceNewTab = event.metaKey || event.ctrlKey;
+    if (!forceNewTab) return;
+
+    const selected = getActiveSearchItem();
+    if (!selected) return;
+    openBookmarkInNewTabOnly(selected);
   }
 }
 

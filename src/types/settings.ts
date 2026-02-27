@@ -14,4 +14,5 @@ export interface UserSettings {
   searchResultView: SearchResultView;
   showRecentOpened: boolean;
   recentOpenedRows: number;
+  showOpenCount: boolean;
 }

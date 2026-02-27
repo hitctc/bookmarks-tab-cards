@@ -19,6 +19,7 @@ function getDefaultSettings(): UserSettings {
     searchResultView: 'card',
     showRecentOpened: true,
     recentOpenedRows: 3,
+    showOpenCount: true,
   };
 }
 
@@ -48,6 +49,9 @@ function mergeSettings(stored: unknown): UserSettings {
   const showRecentOpened = typeof raw.showRecentOpened === 'boolean'
     ? raw.showRecentOpened
     : defaults.showRecentOpened;
+  const showOpenCount = typeof raw.showOpenCount === 'boolean'
+    ? raw.showOpenCount
+    : defaults.showOpenCount;
   const recentOpenedRows = resolveRecentOpenedRows(
     raw,
     cardsPerRow,
@@ -64,6 +68,7 @@ function mergeSettings(stored: unknown): UserSettings {
     searchResultView,
     showRecentOpened,
     recentOpenedRows,
+    showOpenCount,
   };
 }
 

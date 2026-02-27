@@ -89,6 +89,20 @@
         </div>
       </a-form-item>
 
+      <a-form-item label="显示打开次数">
+        <div class="flex items-center justify-between gap-3">
+          <a-switch
+            :checked="settings.showOpenCount"
+            checked-children="开"
+            un-checked-children="关"
+            @change="handleShowOpenCountChange"
+          />
+          <div class="text-xs text-slate-500 dark:text-slate-400">
+            在卡片与列表视图显示“打开 X 次”
+          </div>
+        </div>
+      </a-form-item>
+
       <a-form-item label="最近打开显示行数">
         <div class="flex items-center gap-3">
           <a-slider
@@ -106,17 +120,17 @@
         </div>
       </a-form-item>
 
-      <a-form-item label="最近打开记录">
+      <a-form-item label="打开次数记录">
         <div class="flex items-center justify-between gap-3">
           <div class="text-xs text-slate-500 dark:text-slate-400">
-            当前记录 {{ bookmarksStore.recentOpenedBookmarks.length }} 条
+            已记录 {{ bookmarksStore.recentOpenedBookmarks.length }} 条书签
           </div>
           <a-button
             size="small"
             :disabled="bookmarksStore.recentOpenedBookmarks.length === 0"
-            @click="handleClearRecentOpened"
+            @click="handleClearOpenCountRecords"
           >
-            清空记录
+            清空打开次数
           </a-button>
         </div>
       </a-form-item>
@@ -410,19 +424,23 @@ async function handleShowRecentOpenedChange(value: boolean) {
   await settingsStore.updateSettings({ showRecentOpened: value });
 }
 
+async function handleShowOpenCountChange(value: boolean) {
+  await settingsStore.updateSettings({ showOpenCount: value });
+}
+
 async function handleRecentOpenedRowsChange(value: unknown) {
   const next = Number(value);
   if (!Number.isFinite(next)) return;
   await settingsStore.updateSettings({ recentOpenedRows: next });
 }
 
-async function handleClearRecentOpened() {
+async function handleClearOpenCountRecords() {
   const ok = await bookmarksStore.clearRecentOpenedBookmarks();
   if (!ok) {
-    message.error('清空最近打开记录失败');
+    message.error('清空打开次数记录失败');
     return;
   }
-  message.success('最近打开记录已清空');
+  message.success('打开次数记录已清空');
 }
 
 async function handleRefreshBookmarks() {

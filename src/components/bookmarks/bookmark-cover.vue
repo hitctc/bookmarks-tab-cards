@@ -43,8 +43,21 @@
             <span v-else>{{ segment.text }}</span>
           </template>
         </div>
-        <div v-if="displayUrl" class="mt-0.5 truncate text-[10px] leading-4 text-white/80" :title="displayUrl">
-          {{ displayUrl }}
+        <div class="mt-0.5 flex items-end gap-2">
+          <div
+            v-if="displayUrl"
+            class="min-w-0 flex-1 truncate text-[10px] leading-4 text-white/80"
+            :title="displayUrl"
+          >
+            {{ displayUrl }}
+          </div>
+          <div
+            v-if="props.showOpenCount"
+            class="shrink-0 text-[10px] leading-4 tabular-nums text-white/80"
+            :title="`打开次数：${normalizedOpenCount}`"
+          >
+            {{ normalizedOpenCount }}
+          </div>
         </div>
       </div>
     </div>
@@ -64,6 +77,8 @@ const props = defineProps<{
   url: string;
   title: string;
   highlightQuery?: string;
+  openCount?: number;
+  showOpenCount?: boolean;
 }>();
 
 const faviconIndex = ref(0);
@@ -124,6 +139,12 @@ const displayUrl = computed(() => {
   if (adapterSubtitle) return adapterSubtitle;
 
   return (domain.value || '').trim();
+});
+
+const normalizedOpenCount = computed(() => {
+  const raw = Number(props.openCount ?? 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.floor(raw);
 });
 
 interface HighlightSegment {

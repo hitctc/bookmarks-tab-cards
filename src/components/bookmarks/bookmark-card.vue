@@ -9,7 +9,13 @@
       @click="handleOpenClick"
     >
       <div class="aspect-[21/9] bg-slate-100 dark:bg-slate-800">
-        <BookmarkCover :url="item.url" :title="item.title" :highlight-query="highlightQuery" />
+        <BookmarkCover
+          :url="item.url"
+          :title="item.title"
+          :highlight-query="highlightQuery"
+          :open-count="props.openCount"
+          :show-open-count="props.showOpenCount"
+        />
       </div>
     </a>
 
@@ -57,10 +63,14 @@ const props = withDefaults(
     target: '_self' | '_blank';
     highlightQuery?: string;
     isPinned?: boolean;
+    openCount?: number;
+    showOpenCount?: boolean;
   }>(),
   {
     highlightQuery: '',
     isPinned: false,
+    openCount: 0,
+    showOpenCount: true,
   }
 );
 
