@@ -6,19 +6,31 @@ import {
   buildBookmarkIndex,
   createFolder as createFolderInService,
   deleteBookmark as deleteBookmarkInService,
+  deleteBookmarks as deleteBookmarksInService,
   deleteFolder as deleteFolderInService,
   fetchBookmarksTree,
+  subscribeBookmarksEvents,
   updateFolder as updateFolderInService,
   updateBookmark as updateBookmarkInService,
+  type BookmarksEventsUnsubscribe,
   type CreateFolderPayload,
   type UpdateFolderPayload,
   type UpdateBookmarkPayload,
 } from '@/services/bookmarks-service';
 import { getFromStorage, removeFromStorage, setToStorage } from '@/services/storage-service';
-import type { BookmarkCachePayload, BookmarkFolderNode, BookmarkIndexItem } from '@/types/bookmarks';
+import type {
+  BookmarkCachePayload,
+  BookmarkFolderNode,
+  BookmarkIndexItem,
+  RecentBookmarkOpenRecord,
+} from '@/types/bookmarks';
 import { logError, logInfo } from '@/utils/logger';
 
 type BookmarkPinMap = Record<string, number>;
+type BookmarkRecentOpenMap = Record<string, RecentBookmarkOpenRecord>;
+
+const AUTO_REFRESH_DEBOUNCE_MS = 500;
+const MAX_RECENT_OPENED_RECORDS = 500;
 
 function buildFolderMap(folderNodes: BookmarkFolderNode[]): Record<string, BookmarkFolderNode> {
   const map: Record<string, BookmarkFolderNode> = {};
@@ -175,6 +187,100 @@ function sortBookmarksByPinTime(items: BookmarkIndexItem[], pinMap: BookmarkPinM
     .map((entry) => entry.item);
 }
 
+function normalizeRecentOpenedMap(raw: unknown): BookmarkRecentOpenMap {
+  if (!raw || typeof raw !== 'object') return {};
+
+  const parsed = raw as Record<string, unknown>;
+  const normalized: BookmarkRecentOpenMap = {};
+  for (const [bookmarkId, rawRecord] of Object.entries(parsed)) {
+    if (!bookmarkId || !rawRecord || typeof rawRecord !== 'object') continue;
+
+    const record = rawRecord as Record<string, unknown>;
+    const openedAt = Number(record.openedAt);
+    const openCount = Number(record.openCount);
+    if (!Number.isFinite(openedAt) || openedAt <= 0) continue;
+    if (!Number.isFinite(openCount) || openCount <= 0) continue;
+
+    normalized[bookmarkId] = {
+      bookmarkId,
+      openedAt: Math.floor(openedAt),
+      openCount: Math.max(1, Math.floor(openCount)),
+    };
+  }
+
+  return normalized;
+}
+
+function trimRecentOpenedMap(recentMap: BookmarkRecentOpenMap): BookmarkRecentOpenMap {
+  const entries = Object.entries(recentMap);
+  if (entries.length <= MAX_RECENT_OPENED_RECORDS) return recentMap;
+
+  entries.sort((a, b) => b[1].openedAt - a[1].openedAt);
+  const trimmed: BookmarkRecentOpenMap = {};
+  for (const [bookmarkId, record] of entries.slice(0, MAX_RECENT_OPENED_RECORDS)) {
+    trimmed[bookmarkId] = record;
+  }
+
+  return trimmed;
+}
+
+function cleanupRecentOpenedMap(
+  recentMap: BookmarkRecentOpenMap,
+  bookmarkItems: BookmarkIndexItem[]
+): BookmarkRecentOpenMap {
+  if (Object.keys(recentMap).length === 0) return {};
+  if (bookmarkItems.length === 0) return {};
+
+  const validBookmarkIds = new Set(bookmarkItems.map((item) => item.id));
+  const cleaned: BookmarkRecentOpenMap = {};
+  for (const [bookmarkId, record] of Object.entries(recentMap)) {
+    if (!validBookmarkIds.has(bookmarkId)) continue;
+    cleaned[bookmarkId] = {
+      bookmarkId,
+      openedAt: Math.floor(record.openedAt),
+      openCount: Math.max(1, Math.floor(record.openCount)),
+    };
+  }
+
+  return trimRecentOpenedMap(cleaned);
+}
+
+function isRecentOpenedMapEqual(a: BookmarkRecentOpenMap, b: BookmarkRecentOpenMap): boolean {
+  const aEntries = Object.entries(a);
+  const bEntries = Object.entries(b);
+  if (aEntries.length !== bEntries.length) return false;
+
+  for (const [bookmarkId, record] of aEntries) {
+    const target = b[bookmarkId];
+    if (!target) return false;
+    if (target.openedAt !== record.openedAt || target.openCount !== record.openCount) return false;
+  }
+
+  return true;
+}
+
+function sortBookmarksByRecentOpen(
+  items: BookmarkIndexItem[],
+  recentMap: BookmarkRecentOpenMap
+): BookmarkIndexItem[] {
+  if (items.length <= 1) return items;
+
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      openedAt: Number(recentMap[item.id]?.openedAt ?? 0),
+      openCount: Number(recentMap[item.id]?.openCount ?? 0),
+    }))
+    .filter((entry) => entry.openedAt > 0)
+    .sort((a, b) => {
+      if (a.openedAt !== b.openedAt) return b.openedAt - a.openedAt;
+      if (a.openCount !== b.openCount) return b.openCount - a.openCount;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
+}
+
 export const useBookmarksStore = defineStore('bookmarks', () => {
   const isReady = ref(false);
   const isLoading = ref(false);
@@ -187,6 +293,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   const folderMap = ref<Record<string, BookmarkFolderNode>>({});
   const bookmarkMap = ref<Record<string, BookmarkIndexItem>>({});
   const pinnedBookmarkMap = ref<BookmarkPinMap>({});
+  const recentOpenedBookmarkMap = ref<BookmarkRecentOpenMap>({});
 
   const currentFolderId = ref<string>('1');
   const lastUpdatedAt = ref<number | null>(null);
@@ -222,11 +329,30 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     return sortBookmarksByPinTime(items, pinnedBookmarkMap.value);
   });
 
+  const pinnedBookmarks = computed(() => {
+    if (bookmarkItems.value.length === 0) return [];
+
+    const items = bookmarkItems.value.filter((item) => Number(pinnedBookmarkMap.value[item.id] ?? 0) > 0);
+    return sortBookmarksByPinTime(items, pinnedBookmarkMap.value);
+  });
+
+  const recentOpenedBookmarks = computed(() => {
+    if (bookmarkItems.value.length === 0) return [];
+    return sortBookmarksByRecentOpen(bookmarkItems.value, recentOpenedBookmarkMap.value);
+  });
+
   const folderTreeOptions = computed(() => {
     const rootId = rootFolderId.value;
     if (!rootId) return [];
     return buildFolderTreeOptions(rootId, folderMap.value);
   });
+
+  let autoRefreshUnsubscribe: BookmarksEventsUnsubscribe | null = null;
+  let autoRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let autoRefreshEntryFolderGetter: (() => string) | null = null;
+
+  let pendingRefreshEntryFolderId: string | null = null;
+  let runningRefreshPromise: Promise<void> | null = null;
 
   function setCurrentFolder(folderId: string): boolean {
     if (!folderMap.value[folderId]) return false;
@@ -250,6 +376,63 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     return Number(pinnedBookmarkMap.value[safeId] ?? 0) > 0;
   }
 
+  function getBookmarkPinTime(bookmarkId: string): number {
+    const safeId = bookmarkId.trim();
+    if (!safeId) return 0;
+    return Number(pinnedBookmarkMap.value[safeId] ?? 0);
+  }
+
+  function getBookmarkRecentOpenRecord(bookmarkId: string): RecentBookmarkOpenRecord | null {
+    const safeId = bookmarkId.trim();
+    if (!safeId) return null;
+    return recentOpenedBookmarkMap.value[safeId] ?? null;
+  }
+
+  function clearAutoRefreshTimer(): void {
+    if (!autoRefreshTimer) return;
+    clearTimeout(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+
+  function resolveAutoRefreshEntryFolderId(): string {
+    const fromGetter = autoRefreshEntryFolderGetter?.().trim();
+    if (fromGetter) return fromGetter;
+
+    const fromCurrentFolder = currentFolderId.value.trim();
+    if (fromCurrentFolder) return fromCurrentFolder;
+
+    const fromRoot = rootFolderId.value?.trim();
+    if (fromRoot) return fromRoot;
+
+    return '1';
+  }
+
+  function scheduleAutoRefreshFromEvent(): void {
+    clearAutoRefreshTimer();
+    autoRefreshTimer = setTimeout(() => {
+      autoRefreshTimer = null;
+      void refreshFromChrome(resolveAutoRefreshEntryFolderId());
+    }, AUTO_REFRESH_DEBOUNCE_MS);
+  }
+
+  function startAutoRefresh(getEntryFolderId: () => string): void {
+    stopAutoRefresh();
+    autoRefreshEntryFolderGetter = getEntryFolderId;
+    autoRefreshUnsubscribe = subscribeBookmarksEvents(() => {
+      scheduleAutoRefreshFromEvent();
+    });
+  }
+
+  function stopAutoRefresh(): void {
+    clearAutoRefreshTimer();
+    autoRefreshEntryFolderGetter = null;
+
+    if (!autoRefreshUnsubscribe) return;
+
+    autoRefreshUnsubscribe();
+    autoRefreshUnsubscribe = null;
+  }
+
   async function loadBookmarkPins(): Promise<void> {
     try {
       const stored = await getFromStorage<unknown>(STORAGE_KEYS.bookmarkPins);
@@ -257,6 +440,16 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     } catch (error) {
       pinnedBookmarkMap.value = {};
       logError('读取书签置顶状态失败', error);
+    }
+  }
+
+  async function loadRecentOpenedBookmarks(): Promise<void> {
+    try {
+      const stored = await getFromStorage<unknown>(STORAGE_KEYS.recentOpenedBookmarks);
+      recentOpenedBookmarkMap.value = normalizeRecentOpenedMap(stored);
+    } catch (error) {
+      recentOpenedBookmarkMap.value = {};
+      logError('读取最近打开记录失败', error);
     }
   }
 
@@ -268,6 +461,17 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     const ok = await setToStorage(STORAGE_KEYS.bookmarkPins, cleaned);
     if (!ok) {
       logError('清理无效书签置顶状态失败');
+    }
+  }
+
+  async function syncRecentOpenedWithItems(): Promise<void> {
+    const cleaned = cleanupRecentOpenedMap(recentOpenedBookmarkMap.value, bookmarkItems.value);
+    if (isRecentOpenedMapEqual(cleaned, recentOpenedBookmarkMap.value)) return;
+
+    recentOpenedBookmarkMap.value = cleaned;
+    const ok = await setToStorage(STORAGE_KEYS.recentOpenedBookmarks, cleaned);
+    if (!ok) {
+      logError('清理无效最近打开记录失败');
     }
   }
 
@@ -292,6 +496,44 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     return false;
   }
 
+  async function recordBookmarkOpened(bookmarkId: string): Promise<boolean> {
+    const safeId = bookmarkId.trim();
+    if (!safeId || !bookmarkMap.value[safeId]) return false;
+
+    const previous = recentOpenedBookmarkMap.value;
+    const now = Date.now();
+    const previousRecord = previous[safeId];
+
+    const next = trimRecentOpenedMap({
+      ...previous,
+      [safeId]: {
+        bookmarkId: safeId,
+        openedAt: now,
+        openCount: Math.max(1, Number(previousRecord?.openCount ?? 0) + 1),
+      },
+    });
+
+    recentOpenedBookmarkMap.value = next;
+    const ok = await setToStorage(STORAGE_KEYS.recentOpenedBookmarks, next);
+    if (ok) return true;
+
+    recentOpenedBookmarkMap.value = previous;
+    logError('保存最近打开记录失败');
+    return false;
+  }
+
+  async function clearRecentOpenedBookmarks(): Promise<boolean> {
+    const previous = recentOpenedBookmarkMap.value;
+    recentOpenedBookmarkMap.value = {};
+
+    const ok = await setToStorage(STORAGE_KEYS.recentOpenedBookmarks, {});
+    if (ok) return true;
+
+    recentOpenedBookmarkMap.value = previous;
+    logError('清空最近打开记录失败');
+    return false;
+  }
+
   async function loadCache(entryFolderId: string): Promise<void> {
     try {
       const cached = await getFromStorage<BookmarkCachePayload>(STORAGE_KEYS.bookmarksCache);
@@ -309,6 +551,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       folderMap.value = buildFolderMap(folderNodes.value);
       bookmarkMap.value = buildBookmarkMap(bookmarkItems.value);
       await syncBookmarkPinsWithItems();
+      await syncRecentOpenedWithItems();
       lastUpdatedAt.value = cached.generatedAt ?? null;
 
       const ok = setCurrentFolder(entryFolderId);
@@ -328,7 +571,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     }
   }
 
-  async function refreshFromChrome(entryFolderId: string): Promise<void> {
+  async function performRefreshFromChrome(entryFolderId: string): Promise<void> {
     isLoading.value = true;
     try {
       hasError.value = false;
@@ -342,6 +585,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       folderMap.value = buildFolderMap(folderNodes.value);
       bookmarkMap.value = buildBookmarkMap(bookmarkItems.value);
       await syncBookmarkPinsWithItems();
+      await syncRecentOpenedWithItems();
 
       const cachePayload = toCachePayload(folderNodes.value, bookmarkItems.value);
       await setToStorage(STORAGE_KEYS.bookmarksCache, cachePayload);
@@ -364,6 +608,35 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  async function flushRefreshQueue(): Promise<void> {
+    if (runningRefreshPromise) {
+      await runningRefreshPromise;
+      if (pendingRefreshEntryFolderId) {
+        await flushRefreshQueue();
+      }
+      return;
+    }
+
+    const nextEntryFolderId = pendingRefreshEntryFolderId;
+    if (!nextEntryFolderId) return;
+
+    pendingRefreshEntryFolderId = null;
+    runningRefreshPromise = performRefreshFromChrome(nextEntryFolderId).finally(() => {
+      runningRefreshPromise = null;
+    });
+
+    await runningRefreshPromise;
+
+    if (pendingRefreshEntryFolderId) {
+      await flushRefreshQueue();
+    }
+  }
+
+  async function refreshFromChrome(entryFolderId: string): Promise<void> {
+    pendingRefreshEntryFolderId = entryFolderId;
+    await flushRefreshQueue();
   }
 
   async function updateBookmark(
@@ -398,6 +671,25 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
       hasError.value = true;
       errorMessage.value = '书签删除失败';
       logError('书签删除失败', error);
+      return false;
+    }
+  }
+
+  async function deleteBookmarks(bookmarkIds: string[], entryFolderId: string): Promise<boolean> {
+    const safeIds = Array.from(new Set(bookmarkIds.map((id) => id.trim()).filter(Boolean)));
+    if (safeIds.length === 0) return true;
+
+    try {
+      hasError.value = false;
+      errorMessage.value = null;
+      await deleteBookmarksInService(safeIds);
+      await refreshFromChrome(entryFolderId);
+      if (hasError.value) return false;
+      return true;
+    } catch (error) {
+      hasError.value = true;
+      errorMessage.value = '批量删除书签失败';
+      logError('批量删除书签失败', error);
       return false;
     }
   }
@@ -457,6 +749,7 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
   async function bootstrap(entryFolderId: string): Promise<void> {
     try {
       await loadBookmarkPins();
+      await loadRecentOpenedBookmarks();
       await loadCache(entryFolderId);
     } catch (error) {
       // loadCache 内部已兜底，这里再保险一次，确保 initPage 不会因为缓存炸掉
@@ -479,12 +772,16 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     bookmarkItems,
     currentFolderId,
     lastUpdatedAt,
+    pinnedBookmarkMap,
+    recentOpenedBookmarkMap,
 
     // computed
     breadcrumbFolders,
     currentFolder,
     currentFolders,
     currentBookmarks,
+    pinnedBookmarks,
+    recentOpenedBookmarks,
     folderTreeOptions,
     isBookmarkPinned,
 
@@ -496,10 +793,17 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
     refreshFromChrome,
     updateBookmark,
     deleteBookmark,
+    deleteBookmarks,
     deleteFolder,
     createFolder,
     updateFolder,
     loadCache,
     toggleBookmarkPin,
+    recordBookmarkOpened,
+    clearRecentOpenedBookmarks,
+    startAutoRefresh,
+    stopAutoRefresh,
+    getBookmarkPinTime,
+    getBookmarkRecentOpenRecord,
   };
 });

@@ -13,20 +13,21 @@
 - 扩展形态：Chrome Extension Manifest V3，通过 `chrome_url_overrides.newtab` 覆盖新标签页（`public/manifest.json`）。
 - 入口：`src/main.ts` 注册 Pinia、Router 和按需 Ant Design Vue 组件，加载 `ant-design-vue/dist/reset.css` 与 `src/styles/main.css`。
 - 路由：`src/router/index.ts` 使用 `createWebHashHistory`，当前仅有 `/` 路由，懒加载 `src/pages/newtab-page.vue`。
-- 状态：`src/stores/bookmarks-store.ts` 管理书签索引/导航/缓存刷新；`src/stores/settings-store.ts` 管理设置与主题。
+- 状态：`src/stores/bookmarks-store.ts` 管理书签索引/导航/缓存刷新/最近打开/自动刷新；`src/stores/settings-store.ts` 管理设置与主题。
 - 数据与存储：
   - 书签源：`chrome.bookmarks.getTree`，非扩展环境自动回退 mock（`src/services/mock-bookmarks.ts`）。
   - 持久化：优先 `chrome.storage.local`，开发态回退 `localStorage`（`src/services/storage-service.ts`）。
 
 ## 目录与模块地图
-- `src/pages/newtab-page.vue`：新标签页主视图，负责搜索、快捷键、错误态、书签网格、设置抽屉开关与书签置顶交互。
+- `src/pages/newtab-page.vue`：新标签页主视图，负责搜索、快捷键、错误态、首页置顶/最近打开区块、设置抽屉开关与书签置顶交互。
 - `src/components/bookmarks/*`：书签/文件夹卡片、头像与封面渲染（含 favicon 与渐变兜底逻辑）。
 - `src/components/navigation/breadcrumb-nav.vue`：面包屑与返回上级交互。
-- `src/components/settings/settings-drawer.vue`：入口文件夹、主题、打开方式、每行卡片数、手动刷新。
-- `src/stores/bookmarks-store.ts`：缓存加载、后台刷新、文件夹映射、当前路径与树形选项构建。
-- `src/stores/settings-store.ts`：设置合并与校验、主题 class 同步、设置持久化。
-- `src/services/bookmarks-service.ts`：书签树读取与索引构建（folderNodes + bookmarkItems）。
-- `src/services/bookmarks-search.ts`：搜索归一化、匹配打分、限流返回。
+- `src/components/settings/settings-drawer.vue`：入口文件夹、主题、打开方式、搜索视图、自动刷新、重复书签处理与手动刷新。
+- `src/stores/bookmarks-store.ts`：缓存加载、后台刷新、防抖自动刷新、最近打开、文件夹映射、当前路径与树形选项构建。
+- `src/stores/settings-store.ts`：设置合并与校验、主题 class 同步、设置持久化（含自动刷新与搜索视图偏好）。
+- `src/services/bookmarks-service.ts`：书签树读取、索引构建与书签事件监听封装。
+- `src/services/bookmarks-search.ts`：搜索归一化、匹配打分、Top-K 限流与拼音缓存控制。
+- `src/services/bookmark-preview-service.ts`：智能封面 2.0（站点适配器 + 通用渐变主题生成）。
 - `src/services/storage-service.ts`：统一存储读写删除与异常兜底。
 - `src/utils/*`：URL/domain/favicon、文本归一化、日志输出。
 - `src/types/*`：书签与设置类型定义，作为跨层数据契约。
@@ -42,11 +43,17 @@
   - `currentFolderId` -> `breadcrumbFolders/currentFolders/currentBookmarks`。
   - 面包屑与“返回上级”都通过 store action 更新当前目录。
   - `currentBookmarks` 会优先展示置顶书签，多条置顶按置顶时间升序。
+- 常用即点开链路：
+  - 书签点击 -> `recordBookmarkOpened` 更新 `openedAt/openCount` 本地记录。
+  - 首页入口目录优先展示“置顶 + 最近打开”区块，提升高频访问效率。
 - 搜索链路：
-  - 输入框关键词（120ms 防抖）-> `searchBookmarkItems`。
-  - 支持 `ArrowUp/ArrowDown/Enter/Escape` 与 `Cmd + K`（macOS）/ `Ctrl + K`（Windows）聚焦。
+  - 输入框关键词（120ms 防抖）-> `searchBookmarkItems`（Top-K 排序与 pin/recent 轻量加权）。
+  - 支持 `ArrowUp/ArrowDown/Enter/Escape`、`Cmd/Ctrl + Enter` 与 `Cmd + K`（macOS）/ `Ctrl + K`（Windows）聚焦。
+- 自动刷新链路：
+  - `bookmarks-service:subscribeBookmarksEvents` 监听 created/removed/changed/moved。
+  - `bookmarks-store` 内部防抖触发 `refreshFromChrome`，并用刷新队列合并并发请求。
 - 设置链路：
-  - `settings-drawer` 更新 `entryFolderId/themeMode/openBehavior/cardsPerRow`。
+  - `settings-drawer` 更新 `entryFolderId/themeMode/openBehavior/cardsPerRow/autoRefreshBookmarks/searchResultView`。
   - `settings-store` 统一 merge + clamp + 持久化；`themeMode` 通过 `dark` class 驱动深浅色。
 
 ## 开发规范与协作要点

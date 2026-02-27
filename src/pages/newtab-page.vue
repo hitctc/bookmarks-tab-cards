@@ -72,6 +72,10 @@
 
       <a-spin :spinning="bookmarksStore.isLoading && !bookmarksStore.isReady">
         <div v-if="isSearchMode">
+          <div class="mb-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+            Enter 打开 · {{ SEARCH_OPEN_IN_NEW_TAB_SHORTCUT_LABEL }} 新标签打开
+          </div>
+
           <div
             v-if="searchResults.length === 0"
             class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
@@ -79,9 +83,53 @@
             未找到匹配结果
           </div>
 
+          <div
+            v-else-if="isSearchListView"
+            class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div
+              v-for="(item, index) in visibleSearchResults"
+              :key="item.id"
+              class="group relative border-b border-slate-200 px-3 py-2 transition-colors duration-150 last:border-b-0 dark:border-slate-800"
+              :class="
+                index === selectedIndex
+                  ? 'bg-sky-100/85 ring-1 ring-inset ring-sky-300 dark:bg-sky-900/35 dark:ring-sky-700/70'
+                  : 'hover:bg-sky-50/90 hover:ring-1 hover:ring-inset hover:ring-sky-200 dark:hover:bg-sky-900/20 dark:hover:ring-sky-800/70'
+              "
+            >
+              <div
+                class="pointer-events-none absolute inset-y-1 left-0 w-1 rounded-r transition-opacity duration-150"
+                :class="
+                  index === selectedIndex
+                    ? 'bg-sky-500 opacity-100 dark:bg-sky-400'
+                    : 'bg-sky-300 opacity-0 group-hover:opacity-100 dark:bg-sky-700'
+                "
+              />
+              <a
+                :href="item.url"
+                :target="openTarget"
+                rel="noopener noreferrer"
+                class="flex items-start gap-3"
+                :title="item.url"
+                @click="handleBookmarkOpen(item)"
+              >
+                <BookmarkAvatar :url="item.url" :title="item.title" :domain="item.domain" :size="28" />
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{{ item.title }}</div>
+                  <div class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                    {{ item.domain || item.url }}
+                  </div>
+                  <div class="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
+                    {{ item.folderPath || '根目录' }}
+                  </div>
+                </div>
+              </a>
+            </div>
+          </div>
+
           <div v-else class="grid items-start gap-3" :style="gridStyle">
             <div
-              v-for="(item, index) in searchResults"
+              v-for="(item, index) in visibleSearchResults"
               :key="item.id"
               class="rounded-xl transition-shadow"
               :class="
@@ -97,8 +145,16 @@
                 @edit="handleStartEditBookmark"
                 :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
                 @toggle-pin="handleToggleBookmarkPin"
+                @open="handleBookmarkOpen"
               />
             </div>
+          </div>
+
+          <div
+            v-if="searchResults.length > visibleSearchResults.length"
+            class="mt-2 px-1 text-xs text-slate-500 dark:text-slate-400"
+          >
+            先显示 {{ visibleSearchResults.length }} 条，共 {{ searchResults.length }} 条结果…
           </div>
         </div>
 
@@ -107,10 +163,32 @@
             v-if="isCurrentFolderEmpty"
             class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           >
-            当前文件夹没有内容。你可以在书签栏添加常用网站，或在设置里切换入口文件夹。
+            <div>当前文件夹没有内容。你可以在书签栏添加常用网站，或在设置里切换入口文件夹。</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <a-button size="small" @click="handleOpenBookmarksManager">打开书签管理器</a-button>
+              <a-button size="small" @click="isSettingsOpen = true">切换入口文件夹</a-button>
+            </div>
           </div>
 
           <div v-else class="space-y-4">
+            <section v-if="isHomeFolder && homepageRecentBookmarks.length > 0" class="space-y-2">
+              <div class="px-1 text-xs font-medium tracking-wide text-slate-500 dark:text-slate-400">
+                最近打开
+              </div>
+              <div class="grid items-start gap-3" :style="gridStyle">
+                <BookmarkCard
+                  v-for="item in homepageRecentBookmarks"
+                  :key="`recent-${item.id}`"
+                  :item="item"
+                  :target="openTarget"
+                  @edit="handleStartEditBookmark"
+                  :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
+                  @toggle-pin="handleToggleBookmarkPin"
+                  @open="handleBookmarkOpen"
+                />
+              </div>
+            </section>
+
             <section v-if="bookmarksStore.currentFolders.length > 0" class="space-y-2">
               <div
                 v-if="bookmarksStore.currentBookmarks.length > 0"
@@ -145,6 +223,7 @@
                   @edit="handleStartEditBookmark"
                   :is-pinned="bookmarksStore.isBookmarkPinned(item.id)"
                   @toggle-pin="handleToggleBookmarkPin"
+                  @open="handleBookmarkOpen"
                 />
               </div>
             </section>
@@ -373,8 +452,9 @@
 import { BookOutlined, SettingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { useDebounce, useEventListener } from '@vueuse/core';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
+import BookmarkAvatar from '@/components/bookmarks/bookmark-avatar.vue';
 import BookmarkCard from '@/components/bookmarks/bookmark-card.vue';
 import FolderCard from '@/components/bookmarks/folder-card.vue';
 import BreadcrumbNav from '@/components/navigation/breadcrumb-nav.vue';
@@ -399,6 +479,9 @@ const settingsStore = useSettingsStore();
 const bookmarksStore = useBookmarksStore();
 const isMacPlatform = /Mac|iPhone|iPad|iPod/i.test(globalThis.navigator?.platform || '');
 const SEARCH_FOCUS_SHORTCUT_LABEL = isMacPlatform ? 'Cmd + K' : 'Ctrl + K';
+const SEARCH_OPEN_IN_NEW_TAB_SHORTCUT_LABEL = isMacPlatform ? 'Cmd + Enter' : 'Ctrl + Enter';
+const SEARCH_INITIAL_RENDER_LIMIT = 80;
+const SEARCH_EXPANDED_RENDER_LIMIT = 200;
 
 const isSettingsOpen = ref(false);
 const searchInputRef = ref<FocusableInput | null>(null);
@@ -442,14 +525,33 @@ const debouncedTrimmedSearchQuery = computed(() => debouncedSearchQuery.value.tr
 const openTarget = computed(() => (settingsStore.settings.openBehavior === 'newTab' ? '_blank' : '_self'));
 
 const isSearchMode = computed(() => trimmedSearchQuery.value.length > 0);
+const isSearchListView = computed(() => settingsStore.settings.searchResultView === 'list');
 
 const searchResults = computed(() =>
-  searchBookmarkItems(bookmarksStore.bookmarkItems, debouncedSearchQuery.value, 160)
+  searchBookmarkItems(bookmarksStore.bookmarkItems, debouncedSearchQuery.value, {
+    limit: 260,
+    pinnedAtMap: bookmarksStore.pinnedBookmarkMap,
+    recentOpenMap: bookmarksStore.recentOpenedBookmarkMap,
+  })
 );
+const visibleSearchResultLimit = ref(SEARCH_INITIAL_RENDER_LIMIT);
+const visibleSearchResults = computed(() => searchResults.value.slice(0, visibleSearchResultLimit.value));
 
 const selectedIndex = ref(-1);
 
 const canGoBack = computed(() => bookmarksStore.breadcrumbFolders.length > 1);
+const isHomeFolder = computed(() => bookmarksStore.currentFolderId === settingsStore.settings.entryFolderId);
+
+const homepageRecentBookmarks = computed(() => {
+  if (!settingsStore.settings.showRecentOpened) return [];
+
+  const rawRows = Number(settingsStore.settings.recentOpenedRows ?? 3);
+  const rows = Number.isFinite(rawRows) ? Math.max(1, Math.min(6, Math.round(rawRows))) : 3;
+  const rawCols = Number(settingsStore.settings.cardsPerRow ?? 5);
+  const cols = Number.isFinite(rawCols) ? Math.max(2, Math.min(9, Math.round(rawCols))) : 5;
+  const limit = rows * cols;
+  return bookmarksStore.recentOpenedBookmarks.slice(0, limit);
+});
 
 const isCurrentFolderEmpty = computed(() => {
   return bookmarksStore.currentFolders.length === 0 && bookmarksStore.currentBookmarks.length === 0;
@@ -565,6 +667,8 @@ const createFolderPositionMax = computed(() => {
   if (!parent) return 1;
   return Math.max(1, parent.childFolderIds.length + parent.childBookmarkIds.length + 1);
 });
+
+let searchRenderTimer: ReturnType<typeof setTimeout> | null = null;
 
 function formatDateTime(timestamp: number): string {
   const date = new Date(timestamp);
@@ -1039,20 +1143,56 @@ async function openInExtensionTab(url: string): Promise<boolean> {
   }
 }
 
+function openBookmarkWithTarget(item: BookmarkIndexItem, target: '_self' | '_blank') {
+  void bookmarksStore.recordBookmarkOpened(item.id);
+
+  if (target === '_blank') {
+    const opened = window.open(item.url, '_blank', 'noopener');
+    if (opened) return;
+  }
+
+  window.location.href = item.url;
+}
+
+function getActiveSearchItem(): BookmarkIndexItem | null {
+  const items = visibleSearchResults.value;
+  if (items.length === 0) return null;
+
+  if (selectedIndex.value >= 0 && selectedIndex.value < items.length) {
+    return items[selectedIndex.value];
+  }
+
+  return items[0] ?? null;
+}
+
+function handleBookmarkOpen(item: BookmarkIndexItem) {
+  void bookmarksStore.recordBookmarkOpened(item.id);
+}
+
 function handleSearchKeydown(event: KeyboardEvent) {
   if (!isSearchMode.value) return;
 
   if (event.key === 'ArrowDown') {
-    if (searchResults.value.length === 0) return;
+    if (visibleSearchResults.value.length === 0) return;
     event.preventDefault();
-    selectedIndex.value = Math.min(selectedIndex.value + 1, searchResults.value.length - 1);
+    selectedIndex.value = Math.min(selectedIndex.value + 1, visibleSearchResults.value.length - 1);
     return;
   }
 
   if (event.key === 'ArrowUp') {
-    if (searchResults.value.length === 0) return;
+    if (visibleSearchResults.value.length === 0) return;
     event.preventDefault();
     selectedIndex.value = Math.max(selectedIndex.value - 1, 0);
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    const selected = getActiveSearchItem();
+    if (!selected) return;
+
+    event.preventDefault();
+    const forceNewTab = event.metaKey || event.ctrlKey;
+    openBookmarkWithTarget(selected, forceNewTab ? '_blank' : openTarget.value);
     return;
   }
 
@@ -1067,8 +1207,35 @@ async function handleRefresh() {
   await bookmarksStore.refreshFromChrome(settingsStore.settings.entryFolderId);
 }
 
-watch(searchResults, () => {
+function clearSearchRenderTimer() {
+  if (!searchRenderTimer) return;
+  clearTimeout(searchRenderTimer);
+  searchRenderTimer = null;
+}
+
+function syncAutoRefreshSubscription() {
+  bookmarksStore.stopAutoRefresh();
+
+  if (!settingsStore.settings.autoRefreshBookmarks) return;
+  if (!bookmarksStore.isReady) return;
+
+  bookmarksStore.startAutoRefresh(() => settingsStore.settings.entryFolderId);
+}
+
+watch(searchResults, (results) => {
   selectedIndex.value = -1;
+  clearSearchRenderTimer();
+
+  if (results.length <= SEARCH_INITIAL_RENDER_LIMIT) {
+    visibleSearchResultLimit.value = results.length;
+    return;
+  }
+
+  visibleSearchResultLimit.value = SEARCH_INITIAL_RENDER_LIMIT;
+  searchRenderTimer = setTimeout(() => {
+    visibleSearchResultLimit.value = Math.min(results.length, SEARCH_EXPANDED_RENDER_LIMIT);
+    searchRenderTimer = null;
+  }, 120);
 });
 
 watch(
@@ -1076,6 +1243,14 @@ watch(
   (folderId) => {
     if (!bookmarksStore.isReady) return;
     bookmarksStore.setCurrentFolder(folderId);
+    syncAutoRefreshSubscription();
+  }
+);
+
+watch(
+  () => settingsStore.settings.autoRefreshBookmarks,
+  () => {
+    syncAutoRefreshSubscription();
   }
 );
 
@@ -1096,10 +1271,16 @@ onMounted(() => {
   void initPage();
 });
 
+onUnmounted(() => {
+  clearSearchRenderTimer();
+  bookmarksStore.stopAutoRefresh();
+});
+
 async function initPage() {
   try {
     if (!settingsStore.isReady) await settingsStore.initSettings();
     await bookmarksStore.bootstrap(settingsStore.settings.entryFolderId);
+    syncAutoRefreshSubscription();
     await nextTick();
     focusSearchInput();
   } catch (error) {

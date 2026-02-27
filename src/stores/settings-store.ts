@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue';
 
 import { STORAGE_KEYS } from '@/constants/storage-keys';
 import { getFromStorage, setToStorage } from '@/services/storage-service';
-import type { ThemeMode, UserSettings } from '@/types/settings';
+import type { SearchResultView, ThemeMode, UserSettings } from '@/types/settings';
 import { logError, logInfo } from '@/utils/logger';
 
 function getDefaultSettings(): UserSettings {
@@ -15,6 +15,10 @@ function getDefaultSettings(): UserSettings {
     themeMode: 'system',
     openBehavior: 'currentTab',
     cardsPerRow: 5,
+    autoRefreshBookmarks: true,
+    searchResultView: 'card',
+    showRecentOpened: true,
+    recentOpenedRows: 3,
   };
 }
 
@@ -35,6 +39,20 @@ function mergeSettings(stored: unknown): UserSettings {
     : defaults.openBehavior;
 
   const cardsPerRow = clampCardsPerRow(Number(raw.cardsPerRow ?? defaults.cardsPerRow));
+  const autoRefreshBookmarks = typeof raw.autoRefreshBookmarks === 'boolean'
+    ? raw.autoRefreshBookmarks
+    : defaults.autoRefreshBookmarks;
+  const searchResultView = raw.searchResultView === 'list' || raw.searchResultView === 'card'
+    ? (raw.searchResultView as SearchResultView)
+    : defaults.searchResultView;
+  const showRecentOpened = typeof raw.showRecentOpened === 'boolean'
+    ? raw.showRecentOpened
+    : defaults.showRecentOpened;
+  const recentOpenedRows = resolveRecentOpenedRows(
+    raw,
+    cardsPerRow,
+    defaults.recentOpenedRows
+  );
 
   return {
     schemaVersion: 1,
@@ -42,6 +60,10 @@ function mergeSettings(stored: unknown): UserSettings {
     themeMode,
     openBehavior,
     cardsPerRow,
+    autoRefreshBookmarks,
+    searchResultView,
+    showRecentOpened,
+    recentOpenedRows,
   };
 }
 
@@ -138,3 +160,27 @@ function clampCardsPerRow(value: number): number {
   return Math.max(2, Math.min(9, safe));
 }
 
+function clampRecentOpenedRows(value: number): number {
+  const safe = Number.isFinite(value) ? Math.round(value) : 3;
+  return Math.max(1, Math.min(6, safe));
+}
+
+function resolveRecentOpenedRows(
+  raw: Record<string, unknown>,
+  cardsPerRow: number,
+  fallbackRows: number
+): number {
+  const recentOpenedRows = Number(raw.recentOpenedRows);
+  if (Number.isFinite(recentOpenedRows)) {
+    return clampRecentOpenedRows(recentOpenedRows);
+  }
+
+  // 兼容旧字段：recentOpenedLimit（按条数）迁移为按行数。
+  const legacyLimit = Number(raw.recentOpenedLimit);
+  if (Number.isFinite(legacyLimit)) {
+    const perRow = Math.max(1, cardsPerRow);
+    return clampRecentOpenedRows(Math.ceil(legacyLimit / perRow));
+  }
+
+  return clampRecentOpenedRows(fallbackRows);
+}

@@ -6,6 +6,7 @@
       :target="target"
       rel="noopener noreferrer"
       :title="item.url"
+      @click="handleOpenClick"
     >
       <div class="aspect-[21/9] bg-slate-100 dark:bg-slate-800">
         <BookmarkCover :url="item.url" :title="item.title" :highlight-query="highlightQuery" />
@@ -66,6 +67,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'edit', item: BookmarkIndexItem): void;
   (event: 'toggle-pin', item: BookmarkIndexItem): void;
+  (event: 'open', item: BookmarkIndexItem): void;
 }>();
 
 function handleEditClick(event: MouseEvent) {
@@ -78,5 +80,9 @@ function handleTogglePinClick(event: MouseEvent) {
   event.preventDefault();
   event.stopPropagation();
   emit('toggle-pin', props.item);
+}
+
+function handleOpenClick() {
+  emit('open', props.item);
 }
 </script>

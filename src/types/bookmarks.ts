@@ -24,4 +24,9 @@ export interface BookmarkCachePayload {
   bookmarkItems: BookmarkIndexItem[];
 }
 
+export interface RecentBookmarkOpenRecord {
+  bookmarkId: string;
+  openedAt: number;
+  openCount: number;
+}
 

@@ -21,6 +21,15 @@
       </div>
     </div>
 
+    <div v-if="siteBadgeText" class="absolute left-12 top-2">
+      <div
+        class="inline-flex max-w-[92px] items-center rounded bg-black/34 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/90 backdrop-blur-sm"
+        :title="siteBadgeText"
+      >
+        <span class="truncate">{{ siteBadgeText }}</span>
+      </div>
+    </div>
+
     <div class="absolute inset-x-0 bottom-0 p-0">
       <div class="rounded-md bg-white/14 px-2 py-1.5">
         <div class="poster-title min-w-0 flex-1 text-xs font-semibold text-white">
@@ -44,6 +53,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+
+import { buildSmartPseudoCoverStyle, resolveSiteCoverAdapter } from '@/services/bookmark-preview-service';
 import { getDomainFromUrl, getFaviconFallbackUrls } from '@/utils/url';
 
 const GRADIENT_CACHE_MAX = 400;
@@ -66,11 +77,18 @@ const hasFaviconError = computed(() => !faviconUrl.value);
 
 const domain = computed(() => getDomainFromUrl(props.url));
 
+const siteAdapter = computed(() => resolveSiteCoverAdapter(props.url));
+
 const pseudoSeed = computed(() => {
   return (domain.value || props.title || props.url || '').trim();
 });
 
+const siteBadgeText = computed(() => siteAdapter.value?.badgeText || '');
+
 const pseudoFallbackLetter = computed(() => {
+  const adapterLetter = siteAdapter.value?.fallbackLetter?.trim();
+  if (adapterLetter) return adapterLetter;
+
   const text = (domain.value || props.title || '?').trim();
   return (text[0] || '?').toUpperCase();
 });
@@ -80,14 +98,20 @@ watch(
   () => {
     faviconIndex.value = 0;
     logoCoverStyle.value = null;
-    const cached = faviconGradientCache.get(getGradientCacheKey(props.url));
-    if (cached) logoCoverStyle.value = cached;
+
+    if (!siteAdapter.value) {
+      const cached = faviconGradientCache.get(getGradientCacheKey(props.url));
+      if (cached) logoCoverStyle.value = cached;
+    }
   }
 );
 
 const pseudoPosterTitle = computed(() => {
   const t = (props.title || '').trim();
   if (t) return t;
+
+  const adapterSubtitle = (siteAdapter.value?.subtitle || '').trim();
+  if (adapterSubtitle) return adapterSubtitle;
 
   const d = (domain.value || '').trim();
   if (d) return d;
@@ -96,6 +120,9 @@ const pseudoPosterTitle = computed(() => {
 });
 
 const displayUrl = computed(() => {
+  const adapterSubtitle = (siteAdapter.value?.subtitle || '').trim();
+  if (adapterSubtitle) return adapterSubtitle;
+
   return (domain.value || '').trim();
 });
 
@@ -111,10 +138,13 @@ const highlightedTitleSegments = computed<HighlightSegment[]>(() =>
 const logoCoverStyle = ref<Record<string, string> | null>(null);
 
 const pseudoCoverStyle = computed(() => {
-  return logoCoverStyle.value ?? buildPseudoCoverStyle(pseudoSeed.value);
+  if (siteAdapter.value) return siteAdapter.value.coverStyle;
+  return logoCoverStyle.value ?? buildSmartPseudoCoverStyle(pseudoSeed.value);
 });
 
 function handleFaviconError() {
+  if (siteAdapter.value) return;
+
   faviconIndex.value += 1;
   // 所有候选都失败后才会走标题兜底，这里留一个日志方便排查
   if (faviconIndex.value >= faviconCandidates.value.length) {
@@ -124,6 +154,8 @@ function handleFaviconError() {
 }
 
 function handleFaviconLoad(event: Event) {
+  if (siteAdapter.value) return;
+
   // 已有颜色（缓存/已取色）就不重复计算
   if (logoCoverStyle.value) return;
 
@@ -359,41 +391,6 @@ function clamp01(value: number): number {
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, value));
-}
-
-function hashToUint32(input: string): number {
-  // FNV-1a 32-bit：快、分布够用、可稳定生成同域名的视觉风格
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function buildPseudoCoverStyle(seed: string): Record<string, string> {
-  const safeSeed = (seed || '').trim().toLowerCase();
-  if (!safeSeed) {
-    return {
-      backgroundImage: 'linear-gradient(135deg, #64748b, #334155)',
-    };
-  }
-
-  const hash = hashToUint32(safeSeed);
-  const h1 = 206 + (hash % 18);
-  const h2 = h1 + 8 + ((hash >>> 8) % 10);
-
-  const s1 = 24 + ((hash >>> 4) % 6);
-  const s2 = 16 + ((hash >>> 12) % 5);
-  const l1 = 50 + ((hash >>> 16) % 4);
-  const l2 = 38 + ((hash >>> 20) % 5);
-
-  const c1 = `hsl(${h1}, ${s1}%, ${l1}%)`;
-  const c2 = `hsl(${h2}, ${s2}%, ${l2}%)`;
-
-  return {
-    backgroundImage: `linear-gradient(135deg, ${c1}, ${c2})`,
-  };
 }
 
 function buildHighlightSegments(text: string, rawKeyword: string): HighlightSegment[] {

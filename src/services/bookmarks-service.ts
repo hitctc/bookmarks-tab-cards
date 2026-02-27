@@ -34,6 +34,15 @@ function isChromeBookmarksCreateAvailable(): boolean {
   return !!globalThis.chrome?.bookmarks?.create;
 }
 
+function isChromeBookmarksEventsAvailable(): boolean {
+  return Boolean(
+    globalThis.chrome?.bookmarks?.onCreated &&
+      globalThis.chrome?.bookmarks?.onRemoved &&
+      globalThis.chrome?.bookmarks?.onChanged &&
+      globalThis.chrome?.bookmarks?.onMoved
+  );
+}
+
 export interface CreateFolderPayload {
   title: string;
   parentId: string;
@@ -45,6 +54,8 @@ export interface UpdateFolderPayload {
   parentId?: string;
   index?: number;
 }
+
+export type BookmarksEventsUnsubscribe = () => void;
 
 function getFolderTitle(node: chrome.bookmarks.BookmarkTreeNode): string {
   const rawTitle = (node.title ?? '').trim();
@@ -354,6 +365,46 @@ export async function deleteBookmark(bookmarkId: string): Promise<void> {
       reject(error);
     }
   });
+}
+
+export async function deleteBookmarks(bookmarkIds: string[]): Promise<void> {
+  if (!Array.isArray(bookmarkIds) || bookmarkIds.length === 0) return;
+
+  const uniqueIds = Array.from(new Set(bookmarkIds.map((id) => id.trim()).filter(Boolean)));
+  for (const bookmarkId of uniqueIds) {
+    await deleteBookmark(bookmarkId);
+  }
+}
+
+export function subscribeBookmarksEvents(onAnyChange: () => void): BookmarksEventsUnsubscribe {
+  if (!isChromeBookmarksEventsAvailable()) {
+    return () => {};
+  }
+
+  const handleCreated = (_id: string, _node: chrome.bookmarks.BookmarkTreeNode) => {
+    onAnyChange();
+  };
+  const handleRemoved = (_id: string, _removeInfo: chrome.bookmarks.BookmarkRemoveInfo) => {
+    onAnyChange();
+  };
+  const handleChanged = (_id: string, _changeInfo: chrome.bookmarks.BookmarkChangeInfo) => {
+    onAnyChange();
+  };
+  const handleMoved = (_id: string, _moveInfo: chrome.bookmarks.BookmarkMoveInfo) => {
+    onAnyChange();
+  };
+
+  chrome.bookmarks.onCreated.addListener(handleCreated);
+  chrome.bookmarks.onRemoved.addListener(handleRemoved);
+  chrome.bookmarks.onChanged.addListener(handleChanged);
+  chrome.bookmarks.onMoved.addListener(handleMoved);
+
+  return () => {
+    chrome.bookmarks.onCreated.removeListener(handleCreated);
+    chrome.bookmarks.onRemoved.removeListener(handleRemoved);
+    chrome.bookmarks.onChanged.removeListener(handleChanged);
+    chrome.bookmarks.onMoved.removeListener(handleMoved);
+  };
 }
 
 export async function deleteFolder(folderId: string): Promise<void> {
