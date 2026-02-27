@@ -28,8 +28,22 @@ export default defineConfig(({ mode }) => {
           assetFileNames: 'assets/[name]-[hash][extname]',
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
-            if (id.includes('ant-design-vue') || id.includes('@ant-design')) return 'ui';
-            if (id.includes('vue')) return 'vue';
+
+            // 优先拆分 antd 相关：避免所有 UI 依赖聚合成单个超大 chunk
+            if (id.includes('@ant-design/icons-vue')) return 'ui-icons';
+            if (id.includes('ant-design-vue')) return 'ui-components';
+            if (
+              id.includes('/rc-') ||
+              id.includes('/@ant-design/') ||
+              id.includes('/@ctrl/') ||
+              id.includes('/@emotion/')
+            ) {
+              return 'ui-runtime';
+            }
+
+            if (id.includes('vue') || id.includes('pinia') || id.includes('vue-router') || id.includes('@vueuse')) {
+              return 'vue';
+            }
             return 'vendor';
           },
         },
@@ -37,5 +51,4 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
-
 
