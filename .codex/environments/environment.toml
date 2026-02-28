@@ -6,11 +6,11 @@ name = "bookmarks-tab-cards"
 script = ""
 
 [[actions]]
-name = "npm run build"
+name = "pnpm build"
 icon = "test"
-command = "npm run build"
+command = "pnpm build"
 
 [[actions]]
-name = "npm run dev"
+name = "pnpm dev"
 icon = "debug"
-command = "npm run dev"
+command = "pnpm dev"

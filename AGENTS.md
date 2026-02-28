@@ -9,7 +9,7 @@
 
 ## 项目速览
 - 技术栈：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Ant Design Vue + Tailwind CSS + VueUse。
-- 运行/构建：`npm install`；`npm run dev`（本地 UI）/ `npm run build:watch`（扩展 watch）/ `npm run typecheck` / `npm run build` / `npm run preview`。
+- 运行/构建：`pnpm install`；`pnpm dev`（本地 UI）/ `pnpm build:watch`（扩展 watch）/ `pnpm typecheck` / `pnpm build` / `pnpm preview`。
 - 扩展形态：Chrome Extension Manifest V3，通过 `chrome_url_overrides.newtab` 覆盖新标签页（`public/manifest.json`）。
 - 入口：`src/main.ts` 注册 Pinia、Router 和按需 Ant Design Vue 组件，加载 `ant-design-vue/dist/reset.css` 与 `src/styles/main.css`。
 - 路由：`src/router/index.ts` 使用 `createWebHashHistory`，当前仅有 `/` 路由，懒加载 `src/pages/newtab-page.vue`。
@@ -91,8 +91,8 @@
 - 统一使用 `@/` 别名导入，保持路径风格一致。
 - 新增视图时先评估是否应纳入 `newtab-page` 子组件，而不是直接堆叠在页面内。
 - 与扩展行为相关改动必须同时验证两种模式：
-  - 本地 `npm run dev`（mock 数据）；
-  - 扩展 `npm run build:watch` + Chrome 重新加载（真实书签/存储）。
+  - 本地 `pnpm dev`（mock 数据）；
+  - 扩展 `pnpm build:watch` + Chrome 重新加载（真实书签/存储）。
 
 # Minimal Change Policy（最小改动策略）
 
@@ -157,8 +157,8 @@
 - **每个改动可追溯**：都能在“改动点清单”找到理由。
 
 ## 交付与验证建议
-- 本地 UI：`npm run dev`
-- 类型检查：`npm run typecheck`
-- 扩展构建：`npm run build` 或 `npm run build:watch`
+- 本地 UI：`pnpm dev`
+- 类型检查：`pnpm typecheck`
+- 扩展构建：`pnpm build` 或 `pnpm build:watch`
 - 扩展联调：Chrome 加载 `dist/` 后，修改代码需“重新加载扩展 + 新开标签页”验证。
-- 当前项目暂无独立 `npm test` 脚本，行为改动以 typecheck + build + 手工路径验证为主。
+- 当前项目暂无独立 `pnpm test` 脚本，行为改动以 typecheck + build + 手工路径验证为主。

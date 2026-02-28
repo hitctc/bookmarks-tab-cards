@@ -26,7 +26,7 @@
 
 ```bash
 cd /Users/tc-nihao/1tc/7code/1tc/bookmarks-tab-cards
-npm install
+pnpm install
 ```
 
 ### 2) 两种调试方式（先选一种）
@@ -36,7 +36,7 @@ npm install
 适合调样式、布局、搜索交互、深色模式。此模式下没有 Chrome 扩展 API，会自动使用 mock 书签数据。
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 启动后终端会打印本地地址（例如 `http://localhost:5173/`），直接浏览器打开即可。
@@ -52,7 +52,7 @@ npm run dev
 推荐用 watch 构建（不用你每次手动 build）：
 
 ```bash
-npm run build:watch
+pnpm build:watch
 ```
 
 说明：`build:watch` 默认使用 development 模式，会生成 sourcemap，报错时能直接定位到 `.vue/.ts` 源码位置，调试体验更好。
@@ -60,7 +60,7 @@ npm run build:watch
 ### 3) 构建扩展（产出 dist/，仅一次也可以）
 
 ```bash
-npm run build
+pnpm build
 ```
 
 ### 4) 在 Chrome 加载扩展（加载 dist/）
@@ -76,11 +76,11 @@ npm run build
 * `index.html`
 * `assets/`
 
-缺少时重新执行 `npm run build` 后再加载。
+缺少时重新执行 `pnpm build` 后再加载。
 
 ### 5) 扩展环境调试的具体操作步骤
 
-1. 终端运行 `npm run build:watch`（保持不退出）
+1. 终端运行 `pnpm build:watch`（保持不退出）
 2. Chrome 加载 `dist/`（见上一步）
 3. 你每改一次代码：
    * 等终端 watch 构建完成（看到新的 build 输出）
@@ -95,8 +95,8 @@ npm run build
 ## 发布检查清单（建议）
 
 ```bash
-npm run typecheck
-npm run build
+pnpm typecheck
+pnpm build
 ```
 
 手工关键路径：
