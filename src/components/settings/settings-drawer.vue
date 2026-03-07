@@ -1,12 +1,14 @@
 <template>
   <a-drawer
+    class="editorial-settings-drawer"
+    root-class-name="editorial-settings-drawer-root"
     :open="open"
     title="设置"
     placement="right"
     width="400"
     @update:open="(val: boolean) => emit('update:open', val)"
   >
-    <a-form layout="vertical">
+    <a-form layout="vertical" class="editorial-settings-form">
       <a-form-item label="入口文件夹">
         <a-tree-select
           :value="settings.entryFolderId"
@@ -136,7 +138,7 @@
       </a-form-item>
     </a-form>
 
-    <a-divider />
+    <a-divider class="editorial-settings-divider" />
 
     <div class="flex items-center justify-between gap-3">
       <a-button :loading="bookmarksStore.isLoading" @click="handleRefreshBookmarks">刷新书签</a-button>
@@ -160,7 +162,7 @@
 
     <div
       v-if="duplicateCheckResult"
-      class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900"
+      class="editorial-duplicate-panel mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900"
     >
       <div class="text-xs text-slate-500 dark:text-slate-400">
         检查于 {{ formatDateTime(duplicateCheckResult.checkedAt) }}
@@ -187,7 +189,7 @@
             <div class="flex items-start justify-between gap-2">
               <button
                 type="button"
-                class="text-left text-xs font-medium text-slate-700 underline-offset-2 transition hover:text-sky-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-200 dark:hover:text-sky-400 dark:focus-visible:ring-offset-slate-950"
+                class="text-left text-xs font-medium text-slate-700 underline-offset-2 transition hover:text-[#8e6f4f] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8e6f4f] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-200 dark:hover:text-[#e0c8aa] dark:focus-visible:ring-offset-slate-950"
                 :title="`点击复制名称：${group.displayValue}`"
                 @click="handleCopyDuplicateTitle(group.displayValue)"
               >
@@ -243,7 +245,7 @@
             <div class="flex items-start justify-between gap-2">
               <button
                 type="button"
-                class="text-left text-xs font-medium text-slate-700 underline-offset-2 transition hover:text-sky-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-200 dark:hover:text-sky-400 dark:focus-visible:ring-offset-slate-950"
+                class="text-left text-xs font-medium text-slate-700 underline-offset-2 transition hover:text-[#8e6f4f] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8e6f4f] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-200 dark:hover:text-[#e0c8aa] dark:focus-visible:ring-offset-slate-950"
                 :title="`点击复制地址：${group.displayValue}`"
                 @click="handleCopyDuplicateUrl(group.displayValue)"
               >

@@ -1,7 +1,7 @@
 <template>
-  <div class="group relative w-full">
+  <div class="editorial-folder-card group relative w-full">
     <button
-      class="block w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+      class="block w-full overflow-hidden rounded-2xl border border-slate-200/85 bg-white/95 text-left transition duration-300 hover:-translate-y-0.5 hover:border-[#b59b7a]/60 hover:shadow-[0_16px_36px_-24px_rgba(55,43,32,0.55)] dark:border-slate-800/80 dark:bg-slate-900/85 dark:hover:border-[#6e5b49]"
       type="button"
       @click="handleOpen"
     >
@@ -10,13 +10,13 @@
 
         <div
           v-if="countBadge"
-          class="absolute right-2 top-2 rounded-md bg-white/80 px-2 py-0.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur dark:bg-slate-900/70 dark:text-slate-100"
+          class="absolute right-2 top-2 rounded-md bg-white/85 px-2 py-0.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur dark:bg-slate-900/70 dark:text-slate-100"
         >
           {{ countBadge }}
         </div>
 
         <div class="absolute inset-x-0 bottom-0 p-2.5">
-          <div class="flex items-center gap-2 rounded-md bg-white/14 px-2 py-1.5 backdrop-blur-sm">
+          <div class="flex items-center gap-2 rounded-md bg-white/16 px-2 py-1.5 backdrop-blur-sm">
             <FolderOutlined class="text-sm text-white/90" />
             <div class="min-w-0 flex-1 truncate text-sm font-semibold text-white">
               {{ folderTitle }}
@@ -30,7 +30,7 @@
       type="button"
       title="编辑目录"
       aria-label="编辑目录"
-      class="pointer-events-none absolute left-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-slate-700 opacity-0 shadow-md ring-1 ring-black/10 backdrop-blur-sm transition hover:bg-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-slate-900 dark:focus-visible:ring-offset-slate-950"
+      class="pointer-events-none absolute left-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-slate-700 opacity-0 shadow-md ring-1 ring-black/10 backdrop-blur-sm transition duration-200 hover:bg-white group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8e6f4f] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-slate-900/85 dark:text-slate-100 dark:hover:bg-slate-900 dark:focus-visible:ring-offset-slate-950"
       @click="handleEditClick"
     >
       <EditOutlined />
